@@ -33,7 +33,7 @@ const Navbar = () => {
     return () => document.removeEventListener('click', handleOutsideClick);
   }, []);
 
-  // Debounced search logic for autocomplete
+  // Debounced search logic for autocomplete (searching cast profiles)
   useEffect(() => {
     if (searchQuery.trim().length < 2) {
       setSuggestions([]);
@@ -44,7 +44,7 @@ const Navbar = () => {
     const timer = setTimeout(async () => {
       setIsLoading(true);
       try {
-        const response = await api.get('/movies/autocomplete', {
+        const response = await api.get('/cast/search-external', {
           params: { q: searchQuery }
         });
         setSuggestions(response.data || []);
@@ -64,18 +64,15 @@ const Navbar = () => {
     setSuggestions([]);
     setShowDropdown(false);
 
-    if (item.local) {
-      if (item.mediaType === 'person') {
-        navigate(`/cast/${item.refId}`);
-      } else {
-        navigate(`/movies/${item.refId}`);
-      }
+    const isLocal = item.source === 'local';
+    if (isLocal) {
+      navigate(`/cast/${item.refId}`);
     } else {
       setPreviewEntity({
-        refId: item.refId,
-        source: item.source,
-        type: item.mediaType,
-        title: item.title
+        refId: item.refId || item.tmdbId,
+        source: item.source || 'tmdb',
+        type: 'person',
+        title: item.name || item.title
       });
       setPreviewOpen(true);
     }
@@ -99,16 +96,12 @@ const Navbar = () => {
 
   const isActive = (path) => location.pathname === path;
 
-  // Render navigation links
+  // Render navigation links (Removing Movies catalogue)
   const renderLinks = (isMobile = false) => {
     const linkClass = (path) => `nav-link ${isActive(path) ? 'active' : ''} ${isMobile ? 'mobile-link' : ''}`;
     
     return (
       <>
-        <Link to="/movies" className={linkClass('/movies')} onClick={() => setIsOpen(false)}>
-          <Film size={18} className="link-icon" />
-          <span>Movies & Shows</span>
-        </Link>
         <Link to="/cast" className={linkClass('/cast')} onClick={() => setIsOpen(false)}>
           <Users size={18} className="link-icon" />
           <span>Cast Profiles</span>
@@ -162,30 +155,27 @@ const Navbar = () => {
             <div className="navbar-suggestions-dropdown">
               {suggestions.map((item, index) => (
                 <div
-                  key={index}
-                  className="navbar-suggestion-item"
-                  onClick={() => handleSuggestionClick(item)}
+                   key={index}
+                   className="navbar-suggestion-item"
+                   onClick={() => handleSuggestionClick(item)}
                 >
                   <div className="suggestion-item-main">
-                    {item.posterUrl ? (
-                      <img src={item.posterUrl} alt={item.title} className="suggestion-item-img" />
+                    {item.posterUrl || item.photoUrl ? (
+                      <img src={getProxiedImageUrl(item.posterUrl || item.photoUrl)} alt={item.title || item.name} className="suggestion-item-img" />
                     ) : (
                       <div className="suggestion-item-img-fallback flex-center">
-                        {item.mediaType === 'person' ? <User size={14} /> : <Film size={14} />}
+                        <User size={14} />
                       </div>
                     )}
                     <div className="suggestion-item-meta">
-                      <span className="suggestion-item-title">{item.title}</span>
-                      {item.releaseDate && (
-                        <span className="suggestion-item-year">({new Date(item.releaseDate).getFullYear()})</span>
-                      )}
+                      <span className="suggestion-item-title">{item.title || item.name}</span>
                     </div>
                   </div>
                   <div className="suggestion-item-tags">
-                    <span className={`badge-outline-sm type-${item.mediaType}`}>
-                      {item.mediaType}
+                    <span className="badge-outline-sm type-person">
+                      person
                     </span>
-                    {item.local ? (
+                    {item.source === 'local' ? (
                       <span className="badge-success-sm">Saved</span>
                     ) : (
                       <span className="badge-secondary-sm">TMDB</span>

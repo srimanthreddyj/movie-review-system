@@ -2,20 +2,17 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
-import MovieCard from '../components/MovieCard';
 import CastCard from '../components/CastCard';
-import { Film, Users, Heart, FolderOpen, ArrowRight, Activity, Smile } from 'lucide-react';
+import { Users, Heart, FolderOpen, ArrowRight, Activity, Smile, Video, Loader2 } from 'lucide-react';
 
 const Home = () => {
   const { user } = useAuth();
   const [stats, setStats] = useState({
-    movies: 0,
     cast: 0,
     favourites: 0,
-    notes: 0,
-    collections: 0
+    collections: 0,
+    clips: 0
   });
-  const [recentMovies, setRecentMovies] = useState([]);
   const [featuredActresses, setFeaturedActresses] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -23,31 +20,28 @@ const Home = () => {
     const fetchHomeData = async () => {
       try {
         setLoading(true);
-        // Load movies, cast, and favourites details in parallel
-        const [moviesRes, castRes, favsRes, colRes] = await Promise.all([
-          api.get('/movies'),
+        // Load cast, favourites, collections, and clips details in parallel
+        const [castRes, favsRes, colRes, clipsRes] = await Promise.all([
           api.get('/cast'),
           api.get('/favourites'),
-          api.get('/collections')
+          api.get('/collections'),
+          api.get('/clips')
         ]);
 
-        const moviesList = moviesRes.data.movies || [];
         const castList = castRes.data.casts || [];
         const favsList = favsRes.data;
         const colList = colRes.data;
+        const clipsList = clipsRes.data || [];
 
         // Calculate statistics
-        const favsCount = (favsList.movies?.length || 0) + (favsList.cast?.length || 0) + (favsList.clips?.length || 0);
+        const favsCount = (favsList.cast?.length || 0) + (favsList.clips?.length || 0);
         
         setStats({
-          movies: moviesList.length,
           cast: castList.length,
           favourites: favsCount,
-          collections: colList.length
+          collections: colList.length,
+          clips: clipsList.length
         });
-
-        // Get recent 4 movies
-        setRecentMovies(moviesList.slice(0, 4));
 
         // Get female cast members (Actresses) for featured block
         const actresses = castList
@@ -74,7 +68,7 @@ const Home = () => {
           <span>Hello, {user.name}</span>
         </h1>
         <p className="welcome-subtext">
-          Welcome to CineTrack, your personal catalog for tracking films, TV series, and your favourite actresses.
+          Welcome to CineTrack, your personal directory for tracking your favorite actresses and cast profiles.
         </p>
       </header>
 
@@ -87,13 +81,6 @@ const Home = () => {
         <div className="stats-grid">
           <div className="stat-card flex-between">
             <div>
-              <span className="stat-label">Total Titles</span>
-              <span className="stat-val">{stats.movies}</span>
-            </div>
-            <Film size={32} className="stat-icon" />
-          </div>
-          <div className="stat-card flex-between">
-            <div>
               <span className="stat-label">Cast Profiles</span>
               <span className="stat-val">{stats.cast}</span>
             </div>
@@ -101,7 +88,7 @@ const Home = () => {
           </div>
           <div className="stat-card flex-between">
             <div>
-              <span className="stat-label">Favourites</span>
+              <span className="stat-label">Favorites</span>
               <span className="stat-val">{stats.favourites}</span>
             </div>
             <Heart size={32} className="stat-icon" />
@@ -113,54 +100,39 @@ const Home = () => {
             </div>
             <FolderOpen size={32} className="stat-icon" />
           </div>
+          <div className="stat-card flex-between">
+            <div>
+              <span className="stat-label">Clip Room</span>
+              <span className="stat-val">{stats.clips}</span>
+            </div>
+            <Video size={32} className="stat-icon" />
+          </div>
         </div>
       </section>
 
-      {/* Featured Actresses (Female focus) */}
+      {/* Featured Actresses */}
       <section className="featured-actresses-section">
         <div className="flex-between section-header-row">
           <h2 className="section-title">Featured Actresses</h2>
           <Link to="/cast" className="explore-all-link flex-center">
-            <span>Explore Profiles</span>
+            <span>Explore All Profiles</span>
             <ArrowRight size={14} style={{ marginLeft: '0.25rem' }} />
           </Link>
         </div>
         
         {loading ? (
-          <div className="section-loading">Loading actress profiles...</div>
+          <div className="section-loading flex-center">
+            <Loader2 size={24} className="spinner" style={{ marginRight: '0.5rem' }} />
+            <span>Loading actresses...</span>
+          </div>
         ) : featuredActresses.length === 0 ? (
           <div className="empty-section-message">
-            No actress profiles added yet. Import or add some from the Admin Hub.
+            No actress profiles added yet. Search live from TMDB in Cast Profiles to import them.
           </div>
         ) : (
-          <div className="grid-cards">
+          <div className="grid-cards" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
             {featuredActresses.map((actress) => (
               <CastCard key={actress._id} cast={actress} />
-            ))}
-          </div>
-        )}
-      </section>
-
-      {/* Recent Movie Additions */}
-      <section className="recent-movies-section">
-        <div className="flex-between section-header-row">
-          <h2 className="section-title">Recently Added</h2>
-          <Link to="/movies" className="explore-all-link flex-center">
-            <span>View Catalogue</span>
-            <ArrowRight size={14} style={{ marginLeft: '0.25rem' }} />
-          </Link>
-        </div>
-
-        {loading ? (
-          <div className="section-loading">Loading titles...</div>
-        ) : recentMovies.length === 0 ? (
-          <div className="empty-section-message">
-            Your tracking catalogue is empty. Go to the Admin Hub to search and import your first title!
-          </div>
-        ) : (
-          <div className="grid-cards">
-            {recentMovies.map((movie) => (
-              <MovieCard key={movie._id} movie={movie} />
             ))}
           </div>
         )}
@@ -275,6 +247,13 @@ const Home = () => {
           border-radius: var(--border-radius);
           color: var(--text-secondary);
           font-size: 0.875rem;
+        }
+
+        .spinner {
+          animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
         }
       `}</style>
     </div>

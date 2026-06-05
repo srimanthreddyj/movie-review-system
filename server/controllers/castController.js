@@ -164,7 +164,7 @@ exports.updateCast = async (req, res) => {
   }
 };
 
-// 5. Search External Persons (TMDB)
+// 5. Search External Persons (TMDB & Local Merging)
 exports.searchExternalCast = async (req, res) => {
   try {
     const query = req.query.q;
@@ -172,9 +172,63 @@ exports.searchExternalCast = async (req, res) => {
       return res.status(400).json({ message: 'Query parameter q is required' });
     }
 
+    // 1. Search local database cast profiles
+    const localCast = await Cast.find({
+      name: { $regex: query, $options: 'i' }
+    }).limit(15);
+
+    const formattedLocal = localCast.map(c => ({
+      name: c.name,
+      tmdbId: c.tmdbId,
+      photoUrl: c.photoUrl,
+      gender: c.gender,
+      knownForDepartment: c.knownFor || 'Acting',
+      knownFor: '',
+      source: 'local',
+      refId: c._id.toString()
+    }));
+
+    // 2. Search TMDB external profiles
     const movieApiService = require('../services/movieApiService');
-    const results = await movieApiService.searchExternalPersons(query);
-    res.json(results);
+    let externalResults = [];
+    try {
+      externalResults = await movieApiService.searchExternalPersons(query);
+    } catch (err) {
+      console.warn('External cast search failed:', err.message);
+    }
+
+    // 3. Merge and deduplicate
+    const filteredExternal = [];
+    for (const item of externalResults) {
+      let existingLocal = null;
+      if (item.tmdbId) {
+        existingLocal = localCast.find(c => c.tmdbId === item.tmdbId);
+      }
+      if (!existingLocal) {
+        existingLocal = localCast.find(
+          c => c.name.toLowerCase().trim() === item.name.toLowerCase().trim()
+        );
+      }
+
+      if (existingLocal) {
+        // Already in local, skip adding to avoid duplication
+        continue;
+      } else {
+        filteredExternal.push({
+          name: item.name,
+          tmdbId: item.tmdbId,
+          photoUrl: item.photoUrl,
+          gender: item.gender,
+          knownForDepartment: item.knownForDepartment || 'Acting',
+          knownFor: item.knownFor || '',
+          source: item.source || 'tmdb',
+          refId: item.tmdbId
+        });
+      }
+    }
+
+    const combined = [...formattedLocal, ...filteredExternal];
+    res.json(combined);
   } catch (error) {
     res.status(500).json({ message: 'External cast search failed', error: error.message });
   }

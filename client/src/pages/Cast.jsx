@@ -1,14 +1,18 @@
 import React, { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import CastCard from '../components/CastCard';
-import { Search, UserPlus, RotateCcw } from 'lucide-react';
+import { Search, RotateCcw, Loader2 } from 'lucide-react';
 
 const Cast = () => {
+  const navigate = useNavigate();
   const { user, refreshUser } = useAuth();
   const [castList, setCastList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [userFavs, setUserFavs] = useState([]);
+  const [importingCast, setImportingCast] = useState(false);
+  const [importError, setImportError] = useState(null);
 
   // Search/Filters State
   const [searchQuery, setSearchQuery] = useState('');
@@ -16,7 +20,9 @@ const Cast = () => {
   const [roleFilter, setRoleFilter] = useState('');
 
   useEffect(() => {
-    fetchCastData();
+    if (!searchQuery) {
+      fetchCastData();
+    }
     refreshUser();
   }, []);
 
@@ -40,14 +46,60 @@ const Cast = () => {
     setSearchQuery('');
     setGenderFilter('');
     setRoleFilter('');
+    fetchCastData();
+  };
+
+  const handleSearch = async (e) => {
+    if (e) e.preventDefault();
+    if (!searchQuery.trim()) {
+      fetchCastData();
+      return;
+    }
+    setLoading(true);
+    setImportError(null);
+    try {
+      const response = await api.get('/cast/search-external', {
+        params: { q: searchQuery }
+      });
+      setCastList(response.data || []);
+    } catch (err) {
+      console.error('External cast search failed:', err);
+      setImportError('Failed to execute search. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCastClick = async (member) => {
+    if (member.source === 'local') {
+      navigate(`/cast/${member.refId}`);
+      return;
+    }
+
+    setImportingCast(true);
+    setImportError(null);
+    try {
+      const response = await api.post('/cast/import-external', {
+        tmdbId: member.refId || member.tmdbId,
+        name: member.name
+      });
+      navigate(`/cast/${response.data._id}`);
+    } catch (err) {
+      console.error('On-the-fly cast import failed:', err);
+      setImportError(err.response?.data?.message || 'Failed to import cast profile on-the-fly.');
+    } finally {
+      setImportingCast(false);
+    }
   };
 
   // Perform cascading filters locally
   // Actresses (Female gender) are always pushed to the front in the sort order
   const filteredCast = castList
     .filter((member) => {
-      const matchesSearch = member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (member.nationality && member.nationality.toLowerCase().includes(searchQuery.toLowerCase()));
+      const matchesSearch = searchQuery
+        ? member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (member.nationality && member.nationality.toLowerCase().includes(searchQuery.toLowerCase()))
+        : true;
       const matchesGender = genderFilter ? member.gender === genderFilter : true;
       const matchesRole = roleFilter ? member.knownFor === roleFilter : true;
       return matchesSearch && matchesGender && matchesRole;
@@ -63,14 +115,22 @@ const Cast = () => {
     });
 
   // Extract unique roles/knownFor for filter list
-  const roles = [...new Set(castList.map(c => c.knownFor).filter(Boolean))];
+  const roles = [...new Set(castList.map(c => c.knownFor || c.knownForDepartment).filter(Boolean))];
 
   return (
     <div className="container cast-directory-container">
+      {/* Import Loading Overlay */}
+      {importingCast && (
+        <div className="import-loading-overlay flex-center flex-column">
+          <Loader2 size={48} className="spinner icon-spinner" />
+          <p>Importing & caching cast profile from TMDB...</p>
+        </div>
+      )}
+
       <header className="catalogue-header flex-between" style={{ flexWrap: 'wrap', gap: '1rem', marginBottom: '2rem' }}>
         <div>
           <h1>Cast Profiles</h1>
-          <p style={{ margin: 0 }}>Discover actors and actresses. Actresses are highlighted and prioritized first.</p>
+          <p style={{ margin: 0 }}>Discover actors and actresses. Search live from TMDB and cache profiles instantly.</p>
         </div>
         <button onClick={handleResetFilters} className="btn flex-center" style={{ gap: '0.375rem' }}>
           <RotateCcw size={14} />
@@ -78,20 +138,31 @@ const Cast = () => {
         </button>
       </header>
 
+      {/* Import Error Banner */}
+      {importError && (
+        <div className="import-error-banner flex-between">
+          <span>{importError}</span>
+          <button onClick={() => setImportError(null)} className="btn-close">&times;</button>
+        </div>
+      )}
+
       {/* Filters Bar */}
       <section className="filters-section">
-        <div className="search-bar-container">
+        <form onSubmit={handleSearch} className="search-bar-container">
           <Search size={18} className="search-icon" />
           <input
             type="text"
             className="form-input search-input"
-            placeholder="Search by name, nationality..."
+            placeholder="Search TMDB & Catalog by name, nationality..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
-        </div>
+          <button type="submit" className="btn btn-primary search-submit-btn">
+            Search
+          </button>
+        </form>
 
-        <div className="filters-grid" style={{ gridTemplateColumns: 'repeat(3, 1fr)' }}>
+        <div className="filters-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
           {/* Gender Filter */}
           <div className="filter-group">
             <label className="form-label">Gender</label>
@@ -126,11 +197,14 @@ const Cast = () => {
 
       {/* Grid of Cast Profiles */}
       {loading ? (
-        <div className="catalogue-loading flex-center">Loading profiles...</div>
+        <div className="catalogue-loading flex-center">
+          <Loader2 size={32} className="spinner" style={{ marginRight: '0.5rem' }} />
+          <span>Searching profiles...</span>
+        </div>
       ) : filteredCast.length === 0 ? (
         <div className="catalogue-empty">
           <h3>No profiles found</h3>
-          <p>Try resetting the search criteria or add new profiles in the Admin Hub.</p>
+          <p>Try resetting the search criteria or type in the search box to fetch from TMDB.</p>
           <button onClick={handleResetFilters} className="btn btn-primary" style={{ marginTop: '1rem' }}>
             Clear Filters
           </button>
@@ -139,9 +213,10 @@ const Cast = () => {
         <div className="grid-cards" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
           {filteredCast.map((member) => (
             <CastCard 
-              key={member._id} 
+              key={member.refId || member._id} 
               cast={member} 
               userFavourites={userFavs}
+              onClick={handleCastClick}
             />
           ))}
         </div>
@@ -168,6 +243,8 @@ const Cast = () => {
           margin-bottom: 2rem;
         }
         .search-bar-container {
+          display: flex;
+          gap: 0.75rem;
           position: relative;
           width: 100%;
           margin-bottom: 1.25rem;
@@ -179,9 +256,16 @@ const Cast = () => {
           transform: translateY(-50%);
           color: var(--text-muted);
           pointer-events: none;
+          z-index: 2;
         }
         .search-input {
           padding-left: 2.75rem !important;
+          flex-grow: 1;
+        }
+        .search-submit-btn {
+          white-space: nowrap;
+          padding: 0 1.5rem;
+          height: 42px;
         }
         .filters-grid {
           display: grid;
@@ -220,6 +304,51 @@ const Cast = () => {
         .catalogue-empty p {
           font-size: 0.875rem;
           margin-bottom: 0;
+        }
+
+        /* Import overlay */
+        .import-loading-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100vw;
+          height: 100vh;
+          background-color: rgba(0, 0, 0, 0.85);
+          backdrop-filter: blur(8px);
+          z-index: 2000;
+          color: white;
+          gap: 1.5rem;
+        }
+        .icon-spinner {
+          color: var(--accent-color, #3b82f6);
+        }
+        .spinner {
+          animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        /* Error banner */
+        .import-error-banner {
+          display: flex;
+          background-color: rgba(220, 38, 38, 0.15);
+          border: 1px solid rgba(220, 38, 38, 0.3);
+          color: #ef4444;
+          padding: 0.75rem 1.25rem;
+          border-radius: var(--border-radius);
+          margin-bottom: 1.5rem;
+          font-weight: 500;
+          align-items: center;
+        }
+        .btn-close {
+          background: none;
+          border: none;
+          color: inherit;
+          font-size: 1.5rem;
+          cursor: pointer;
+          line-height: 1;
+          padding: 0 0.5rem;
         }
       `}</style>
     </div>

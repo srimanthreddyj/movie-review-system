@@ -2,8 +2,6 @@ import React from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import Navbar from './components/Navbar';
 import Home from './pages/Home';
-import Movies from './pages/Movies';
-import MovieDetail from './pages/MovieDetail';
 import Cast from './pages/Cast';
 import CastDetail from './pages/CastDetail';
 import Favourites from './pages/Favourites';
@@ -42,22 +40,7 @@ function App() {
                   </ProtectedRoute>
                 }
               />
-              <Route
-                path="/movies"
-                element={
-                  <ProtectedRoute>
-                    <Movies />
-                  </ProtectedRoute>
-                }
-              />
-              <Route
-                path="/movies/:id"
-                element={
-                  <ProtectedRoute>
-                    <MovieDetail />
-                  </ProtectedRoute>
-                }
-              />
+              <Route path="/movies" element={<Navigate to="/cast" replace />} />
               <Route
                 path="/cast"
                 element={
