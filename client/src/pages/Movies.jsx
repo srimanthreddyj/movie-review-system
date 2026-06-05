@@ -1,14 +1,17 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import MovieCard from '../components/MovieCard';
-import { Search, SlidersHorizontal, Tag, RotateCcw } from 'lucide-react';
+import { Search, SlidersHorizontal, Tag, RotateCcw, Loader2 } from 'lucide-react';
 
 const Movies = () => {
+  const navigate = useNavigate();
   const { user, refreshUser } = useAuth();
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [importingMovie, setImportingMovie] = useState(false);
+  const [importError, setImportError] = useState(null);
 
   // Filters State
   const [searchQuery, setSearchQuery] = useState('');
@@ -21,11 +24,12 @@ const Movies = () => {
   const [languages, setLanguages] = useState([]);
   const [userTags, setUserTags] = useState([]);
   const [userFavs, setUserFavs] = useState([]);
-  const [assignedTags, setAssignedTags] = useState([]);
 
   useEffect(() => {
-    fetchCatalogData();
-  }, [tagFilter]); // Refetch if server-side tag filtering is requested, though we can also filter locally!
+    if (!searchQuery) {
+      fetchCatalogData();
+    }
+  }, [tagFilter]);
 
   const fetchCatalogData = async () => {
     setLoading(true);
@@ -38,25 +42,13 @@ const Movies = () => {
       const uniqueLangs = [...new Set((response.data.movies || []).map(m => m.language).filter(Boolean))];
       setLanguages(uniqueLangs);
 
-      // Load user preferences (favourites, tags, tag assignments)
+      // Load user preferences (favourites, tags)
       const [favsRes, tagsRes] = await Promise.all([
         api.get('/favourites'),
         api.get('/tags')
       ]);
       setUserFavs(favsRes.data.movies || []);
       setUserTags(tagsRes.data || []);
-
-      // Get tag assignments to render dot indicators on cards
-      // Wait, tag assignments are fetched for movie entities
-      // We can query user profile details or we can use custom resolve
-      // Let's resolve the tag assignments
-      // We will make a tag assignments fetch
-      const assignments = [];
-      for (const tag of tagsRes.data) {
-        const assignRes = await api.get(`/tags?tagId=${tag._id}`);
-        // Wait, the tag routes might support listing. Let's fetch assignments from user state
-      }
-      
     } catch (error) {
       console.error('Failed to load catalogue data:', error);
     } finally {
@@ -75,12 +67,63 @@ const Movies = () => {
     setStatusFilter('');
     setLanguageFilter('');
     setTagFilter('');
+    fetchCatalogData();
+  };
+
+  const handleSearch = async (e) => {
+    if (e) e.preventDefault();
+    if (!searchQuery.trim()) {
+      fetchCatalogData();
+      return;
+    }
+    setLoading(true);
+    setImportError(null);
+    try {
+      const response = await api.get('/movies/search', {
+        params: { q: searchQuery }
+      });
+      setMovies(response.data || []);
+    } catch (error) {
+      console.error('Failed to search externally:', error);
+      setImportError('Failed to execute search. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleMovieClick = async (movie) => {
+    if (movie.source === 'local') {
+      navigate(`/movies/${movie.refId}`);
+      return;
+    }
+
+    setImportingMovie(true);
+    setImportError(null);
+    try {
+      const response = await api.get('/movies/external-details', {
+        params: {
+          refId: movie.refId,
+          source: movie.source,
+          mediaType: movie.mediaType || 'movie',
+          title: movie.title,
+          onlyActresses: 'false'
+        }
+      });
+      navigate(`/movies/${response.data._id}`);
+    } catch (err) {
+      console.error('Auto import failed:', err);
+      setImportError(err.response?.data?.message || 'Failed to import movie details on-the-fly.');
+    } finally {
+      setImportingMovie(false);
+    }
   };
 
   // Perform local cascading filters on movies array
   const filteredMovies = movies.filter((movie) => {
-    const matchesSearch = movie.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (movie.originalTitle && movie.originalTitle.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesSearch = searchQuery
+      ? movie.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (movie.originalTitle && movie.originalTitle.toLowerCase().includes(searchQuery.toLowerCase()))
+      : true;
     const matchesMedia = mediaTypeFilter ? movie.mediaType === mediaTypeFilter : true;
     const matchesStatus = statusFilter ? movie.status === statusFilter : true;
     const matchesLang = languageFilter ? movie.language === languageFilter : true;
@@ -90,10 +133,18 @@ const Movies = () => {
 
   return (
     <div className="container catalogue-container">
+      {/* Import overlay */}
+      {importingMovie && (
+        <div className="import-loading-overlay flex-center flex-column">
+          <Loader2 size={48} className="spinner icon-spinner" />
+          <p>Importing & caching movie details from TMDB...</p>
+        </div>
+      )}
+
       <header className="catalogue-header flex-between" style={{ flexWrap: 'wrap', gap: '1rem', marginBottom: '2rem' }}>
         <div>
           <h1>Movies & TV Shows</h1>
-          <p style={{ margin: 0 }}>Browse and filter your tracked media catalog.</p>
+          <p style={{ margin: 0 }}>Search the TMDB database and explore details instantly.</p>
         </div>
         <button onClick={handleResetFilters} className="btn flex-center" style={{ gap: '0.375rem' }}>
           <RotateCcw size={14} />
@@ -101,18 +152,29 @@ const Movies = () => {
         </button>
       </header>
 
+      {/* Import Error Banner */}
+      {importError && (
+        <div className="import-error-banner flex-between">
+          <span>{importError}</span>
+          <button onClick={() => setImportError(null)} className="btn-close">&times;</button>
+        </div>
+      )}
+
       {/* Search and Filters Bar */}
       <section className="filters-section">
-        <div className="search-bar-container">
+        <form onSubmit={handleSearch} className="search-bar-container">
           <Search size={18} className="search-icon" />
           <input
             type="text"
             className="form-input search-input"
-            placeholder="Search by movie/series title..."
+            placeholder="Search TMDB & Catalog by title..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
-        </div>
+          <button type="submit" className="btn btn-primary search-submit-btn">
+            Search
+          </button>
+        </form>
 
         <div className="filters-grid">
           {/* Media Type Filter */}
@@ -177,18 +239,21 @@ const Movies = () => {
 
       {/* Grid of Movie Cards */}
       {loading ? (
-        <div className="catalogue-loading flex-center">Loading catalogue...</div>
+        <div className="catalogue-loading flex-center">
+          <Loader2 size={32} className="spinner" style={{ marginRight: '0.5rem' }} />
+          <span>Searching movies...</span>
+        </div>
       ) : filteredMovies.length === 0 ? (
         <div className="catalogue-empty">
-          <h3>No matches found in catalog</h3>
-          <p>This page only filters titles already in your catalog. To search externally (TMDB, OMDb, Gemini) and add new titles, use the Admin Hub.</p>
+          <h3>No matches found</h3>
+          <p>We couldn't find any titles. Try searching something else or reset your filters.</p>
           <div className="flex-center" style={{ gap: '1rem', marginTop: '1rem', flexWrap: 'wrap' }}>
             <button onClick={handleResetFilters} className="btn btn-secondary">
-              Clear Filters
+              Reset Filters
             </button>
             {user?.role === 'admin' && (
               <Link to="/admin" className="btn btn-primary">
-                Go to Admin Hub
+                Go to Import Hub
               </Link>
             )}
           </div>
@@ -197,10 +262,11 @@ const Movies = () => {
         <div className="grid-cards">
           {filteredMovies.map((movie) => (
             <MovieCard 
-              key={movie._id} 
+              key={movie.refId || movie._id} 
               movie={movie} 
               userFavourites={userFavs}
-              userTags={[]} // Optionally populates tags if needed
+              userTags={userTags}
+              onClick={handleMovieClick}
             />
           ))}
         </div>
@@ -227,6 +293,8 @@ const Movies = () => {
           margin-bottom: 2rem;
         }
         .search-bar-container {
+          display: flex;
+          gap: 0.75rem;
           position: relative;
           width: 100%;
           margin-bottom: 1.25rem;
@@ -238,9 +306,16 @@ const Movies = () => {
           transform: translateY(-50%);
           color: var(--text-muted);
           pointer-events: none;
+          z-index: 2;
         }
         .search-input {
           padding-left: 2.75rem !important;
+          flex-grow: 1;
+        }
+        .search-submit-btn {
+          white-space: nowrap;
+          padding: 0 1.5rem;
+          height: 42px;
         }
         .filters-grid {
           display: grid;
@@ -285,6 +360,51 @@ const Movies = () => {
         .catalogue-empty p {
           font-size: 0.875rem;
           margin-bottom: 0;
+        }
+
+        /* Import overlay */
+        .import-loading-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100vw;
+          height: 100vh;
+          background-color: rgba(0, 0, 0, 0.85);
+          backdrop-filter: blur(8px);
+          z-index: 2000;
+          color: white;
+          gap: 1.5rem;
+        }
+        .icon-spinner {
+          color: var(--accent-color, #3b82f6);
+        }
+        .spinner {
+          animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+          to { transform: rotate(360deg); }
+        }
+
+        /* Error banner */
+        .import-error-banner {
+          display: flex;
+          background-color: rgba(220, 38, 38, 0.15);
+          border: 1px solid rgba(220, 38, 38, 0.3);
+          color: #ef4444;
+          padding: 0.75rem 1.25rem;
+          border-radius: var(--border-radius);
+          margin-bottom: 1.5rem;
+          font-weight: 500;
+          align-items: center;
+        }
+        .btn-close {
+          background: none;
+          border: none;
+          color: inherit;
+          font-size: 1.5rem;
+          cursor: pointer;
+          line-height: 1;
+          padding: 0 0.5rem;
         }
       `}</style>
     </div>

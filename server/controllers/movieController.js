@@ -91,7 +91,7 @@ const processCastList = async (rawCast, dataSource, onlyActresses = false) => {
   return processedCast;
 };
 
-// 1. Search External API (Database-First Caching)
+// 1. Search External API (Database-First Caching & Merging)
 exports.searchExternal = async (req, res) => {
   try {
     const query = req.query.q;
@@ -99,31 +99,62 @@ exports.searchExternal = async (req, res) => {
       return res.status(400).json({ message: 'Query parameter q is required' });
     }
 
-    // Step A: Check local database first to save API calls
+    // Step A: Search local database
     const localMovies = await Movie.find({
       $or: [
         { title: { $regex: query, $options: 'i' } },
         { originalTitle: { $regex: query, $options: 'i' } }
       ]
-    }).limit(10);
+    }).limit(15);
 
-    if (localMovies.length > 0) {
-      const mappedLocal = localMovies.map(movie => ({
-        title: movie.title,
-        originalTitle: movie.originalTitle || '',
-        releaseDate: movie.releaseDate,
-        posterUrl: movie.posterUrl,
-        refId: movie._id.toString(),
-        source: 'local',
-        mediaType: movie.mediaType || 'movie',
-        synopsis: movie.synopsis || ''
-      }));
-      return res.json(mappedLocal);
+    const formattedLocal = localMovies.map(movie => ({
+      title: movie.title,
+      originalTitle: movie.originalTitle || '',
+      releaseDate: movie.releaseDate,
+      posterUrl: movie.posterUrl,
+      refId: movie._id.toString(),
+      source: 'local',
+      mediaType: movie.mediaType || 'movie',
+      synopsis: movie.synopsis || ''
+    }));
+
+    // Step B: Search TMDB/external sources via movieApiService
+    let externalMovies = [];
+    try {
+      externalMovies = await movieApiService.searchMovies(query);
+    } catch (err) {
+      console.warn('External search failed in controller:', err.message);
     }
 
-    // Step B: Call external API fallback chain if not found locally
-    const movies = await movieApiService.searchMovies(query);
-    res.json(movies);
+    // Step C: Merge and deduplicate
+    const filteredExternal = [];
+    for (const item of externalMovies) {
+      // Check if this external item is already in our DB by tmdbId, imdbId or exact title match
+      let existingLocal = null;
+      if (item.source === 'tmdb') {
+        existingLocal = localMovies.find(m => m.tmdbId === item.refId);
+      } else if (item.source === 'omdb') {
+        existingLocal = localMovies.find(m => m.imdbId === item.refId);
+      }
+
+      // Fallback check by exact title
+      if (!existingLocal) {
+        existingLocal = localMovies.find(
+          m => m.title.toLowerCase().trim() === item.title.toLowerCase().trim()
+        );
+      }
+
+      if (existingLocal) {
+        // If it is already in our database, it will be included in the formattedLocal list.
+        // Therefore, we skip adding it again as an external item.
+        continue;
+      } else {
+        filteredExternal.push(item);
+      }
+    }
+
+    const combined = [...formattedLocal, ...filteredExternal];
+    res.json(combined);
   } catch (error) {
     res.status(500).json({ message: 'External search failed', error: error.message });
   }

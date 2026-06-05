@@ -1,83 +1,106 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { Film, Tv, Calendar, Tag } from 'lucide-react';
+import { Film, Tv, Calendar } from 'lucide-react';
 import { getProxiedImageUrl } from '../services/api';
 
-const MovieCard = ({ movie, userTags = [], userFavourites = [] }) => {
-  const { _id, title, mediaType, releaseDate, posterUrl, genre = [] } = movie;
+const MovieCard = ({ movie, userTags = [], userFavourites = [], onClick }) => {
+  const { _id, source, title, mediaType, releaseDate, posterUrl, genre = [] } = movie;
+  
+  const isExternal = source && source !== 'local';
   
   // Format release year
   const releaseYear = releaseDate ? new Date(releaseDate).getFullYear() : 'N/A';
   
-  // Check if this item is in the user's favourites list
-  const favouriteItem = userFavourites.find(
-    (fav) => fav.entityId.toString() === _id.toString()
-  );
+  // Check if this item is in the user's favourites list safely
+  const favouriteItem = (_id && userFavourites) ? userFavourites.find(
+    (fav) => fav.entityId && fav.entityId.toString() === _id.toString()
+  ) : null;
   
-  // Map assigned tags
-  const assignedTags = userTags.filter(
-    (tag) => tag.entityId.toString() === _id.toString()
+  // Map assigned tags safely
+  const assignedTags = (_id && userTags) ? userTags.filter(
+    (tag) => tag.entityId && tag.entityId.toString() === _id.toString()
+  ) : [];
+
+  const CardContent = () => (
+    <>
+      <div className="card-img-container">
+        {posterUrl ? (
+          <img src={getProxiedImageUrl(posterUrl)} alt={title} className="card-img" loading="lazy" />
+        ) : (
+          <div className="card-img-fallback flex-center">
+            {mediaType === 'series' ? <Tv size={40} /> : <Film size={40} />}
+            <span className="fallback-text">{title}</span>
+          </div>
+        )}
+        
+        {/* Media Type Badge Overlay */}
+        <span className="media-type-badge flex-center">
+          {mediaType === 'series' ? <Tv size={12} /> : <Film size={12} />}
+          <span style={{ textTransform: 'capitalize', marginLeft: '0.25rem' }}>{mediaType}</span>
+        </span>
+
+        {/* Source/Import Status Badge Overlay */}
+        <span className={`source-badge flex-center ${isExternal ? 'source-external' : 'source-local'}`}>
+          {isExternal ? `TMDB` : 'In Catalog'}
+        </span>
+
+        {/* Priority Level Overlay if Favourited */}
+        {favouriteItem && (
+          <span className={`priority-badge priority-${favouriteItem.level.toLowerCase()}`}>
+            {favouriteItem.level}
+          </span>
+        )}
+      </div>
+      
+      <div className="card-content">
+        <h3 className="card-title" title={title}>{title}</h3>
+        
+        <div className="movie-card-meta flex-center">
+          <Calendar size={13} />
+          <span className="meta-text">{releaseYear}</span>
+        </div>
+
+        {/* Genres */}
+        {genre.length > 0 && (
+          <div className="movie-card-genres">
+            {genre.slice(0, 2).map((g, index) => (
+              <span key={index} className="genre-pill">{g}</span>
+            ))}
+          </div>
+        )}
+
+        {/* User Tag Indicators */}
+        {assignedTags.length > 0 && (
+          <div className="movie-card-tags">
+            {assignedTags.slice(0, 3).map((assignment) => (
+              <span 
+                key={assignment._id} 
+                className="tag-dot" 
+                style={{ backgroundColor: assignment.color || '#808080' }} 
+                title={assignment.name}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </>
   );
 
   return (
     <div className="card movie-card">
-      <Link to={`/movies/${_id}`} className="movie-card-link">
-        <div className="card-img-container">
-          {posterUrl ? (
-            <img src={getProxiedImageUrl(posterUrl)} alt={title} className="card-img" loading="lazy" />
-          ) : (
-            <div className="card-img-fallback flex-center">
-              {mediaType === 'series' ? <Tv size={40} /> : <Film size={40} />}
-              <span className="fallback-text">{title}</span>
-            </div>
-          )}
-          
-          {/* Media Type Badge Overlay */}
-          <span className="media-type-badge flex-center">
-            {mediaType === 'series' ? <Tv size={12} /> : <Film size={12} />}
-            <span style={{ textTransform: 'capitalize', marginLeft: '0.25rem' }}>{mediaType}</span>
-          </span>
-
-          {/* Priority Level Overlay if Favourited */}
-          {favouriteItem && (
-            <span className={`priority-badge priority-${favouriteItem.level.toLowerCase()}`}>
-              {favouriteItem.level}
-            </span>
-          )}
+      {isExternal ? (
+        <div 
+          onClick={() => onClick && onClick(movie)} 
+          className="movie-card-link"
+          style={{ cursor: 'pointer', height: '100%', display: 'flex', flexDirection: 'column' }}
+        >
+          <CardContent />
         </div>
-        
-        <div className="card-content">
-          <h3 className="card-title" title={title}>{title}</h3>
-          
-          <div className="movie-card-meta flex-center">
-            <Calendar size={13} />
-            <span className="meta-text">{releaseYear}</span>
-          </div>
-
-          {/* Genres */}
-          {genre.length > 0 && (
-            <div className="movie-card-genres">
-              {genre.slice(0, 2).map((g, index) => (
-                <span key={index} className="genre-pill">{g}</span>
-              ))}
-            </div>
-          )}
-
-          {/* User Tag Indicators */}
-          {assignedTags.length > 0 && (
-            <div className="movie-card-tags">
-              {assignedTags.slice(0, 3).map((assignment) => (
-                <span 
-                  key={assignment._id} 
-                  className="tag-dot" 
-                  style={{ backgroundColor: assignment.color || '#808080' }} 
-                  title={assignment.name}
-                />
-              ))}
-            </div>
-          )}
-        </div>
-      </Link>
+      ) : (
+        <Link to={`/movies/${_id}`} className="movie-card-link">
+          <CardContent />
+        </Link>
+      )}
 
       <style>{`
         .movie-card {
@@ -113,6 +136,24 @@ const MovieCard = ({ movie, userTags = [], userFavourites = [] }) => {
           border-radius: var(--border-radius);
           font-size: 0.75rem;
           font-weight: 500;
+        }
+        .source-badge {
+          position: absolute;
+          bottom: 0.5rem;
+          left: 0.5rem;
+          padding: 0.25rem 0.5rem;
+          color: #ffffff;
+          border-radius: var(--border-radius);
+          font-size: 0.7rem;
+          font-weight: 600;
+          text-transform: uppercase;
+          box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+        .source-external {
+          background-color: rgba(59, 130, 246, 0.95); /* Blue */
+        }
+        .source-local {
+          background-color: rgba(16, 185, 129, 0.95); /* Green */
         }
         .priority-badge {
           position: absolute;
@@ -176,3 +217,4 @@ const MovieCard = ({ movie, userTags = [], userFavourites = [] }) => {
 };
 
 export default MovieCard;
+

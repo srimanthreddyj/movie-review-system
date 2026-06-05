@@ -21,9 +21,14 @@ api.interceptors.request.use(
   }
 );
 
-// Helper to rewrite TMDB image URLs (disabled to use direct TMDB URLs directly)
+// Helper to rewrite TMDB image URLs (routing via backend proxy to bypass ISP blocks in India)
 export const getProxiedImageUrl = (url) => {
-  return url || '';
+  if (!url) return '';
+  if (url.includes('image.tmdb.org')) {
+    const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+    return `${baseURL}/movies/image-proxy?url=${encodeURIComponent(url)}`;
+  }
+  return url;
 };
 
 export default api;
