@@ -1,0 +1,304 @@
+/* Collections Premium Styling */
+
+.collections-container {
+  padding-top: 2rem;
+  padding-bottom: 4rem;
+  text-align: left;
+}
+
+/* Header */
+.collections-header {
+  margin-bottom: 2rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+.collections-header h1 {
+  font-size: 2.25rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+/* Empty State */
+.collections-empty-state {
+  flex-direction: column;
+  padding: 4rem 2rem;
+  background: var(--card-bg);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--border-radius-lg);
+  text-align: center;
+  max-width: 600px;
+  margin: 3rem auto;
+}
+
+.empty-state-icon {
+  color: var(--text-muted);
+  opacity: 0.5;
+  margin-bottom: 1.5rem;
+}
+
+.collections-empty-state h2 {
+  font-size: 1.35rem;
+  margin: 0 0 0.5rem;
+  color: var(--text-primary);
+}
+
+.collections-empty-state p {
+  color: var(--text-secondary);
+  font-size: 0.938rem;
+  margin: 0;
+  max-width: 380px;
+  line-height: 1.5;
+}
+
+/* Card Preview */
+.collection-card-preview {
+  cursor: pointer;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  transition: transform var(--transition-speed), border-color var(--transition-speed), box-shadow var(--transition-speed);
+}
+
+.collection-card-preview:hover {
+  transform: translateY(-4px);
+  border-color: var(--text-muted);
+  box-shadow: var(--shadow-md);
+}
+
+.col-preview-banner {
+  height: 140px;
+  background-size: cover;
+  background-position: center;
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  padding: 1rem;
+}
+
+.col-preview-badge {
+  background-color: rgba(0, 0, 0, 0.75);
+  color: #ffffff;
+  font-size: 0.75rem;
+  font-weight: 500;
+  padding: 0.2rem 0.5rem;
+  border-radius: 4px;
+}
+
+.col-preview-name {
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 0.35rem 0;
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.col-preview-desc {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.4;
+  height: 2.8em;
+}
+
+/* Detail View Layout */
+.collection-details-view {
+  width: 100%;
+}
+
+.details-header-bar {
+  margin-bottom: 1.5rem;
+  flex-wrap: wrap;
+  gap: 1rem;
+}
+
+/* Hero Banner */
+.collection-banner {
+  height: 200px;
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--border-color);
+  background-size: cover;
+  background-position: center;
+  overflow: hidden;
+  position: relative;
+  margin-bottom: 2rem;
+  padding: 2rem;
+  text-align: center;
+}
+
+.banner-content {
+  z-index: 5;
+  color: #ffffff;
+}
+
+.banner-folder-icon {
+  margin-bottom: 0.5rem;
+  opacity: 0.85;
+}
+
+.banner-title {
+  font-size: 2.25rem;
+  font-weight: 700;
+  margin: 0 0 0.5rem;
+  letter-spacing: -0.01em;
+}
+
+.banner-desc {
+  font-size: 0.938rem;
+  opacity: 0.9;
+  max-width: 600px;
+  margin: 0 auto 1rem;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.banner-count-tag {
+  background-color: var(--accent-color);
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 0.25rem 0.75rem;
+  border-radius: 20px;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+/* Detail Tab Controls */
+.collections-tabs {
+  border-bottom: 1px solid var(--border-color);
+  margin-bottom: 2rem;
+  gap: 1rem;
+  justify-content: flex-start;
+  overflow-x: auto;
+  padding-bottom: 1px;
+}
+
+.col-tab-btn {
+  background: none;
+  border: none;
+  padding: 0.75rem 1rem;
+  font-size: 0.938rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color var(--transition-speed), border-color var(--transition-speed);
+  white-space: nowrap;
+}
+
+.col-tab-btn:hover {
+  color: var(--text-primary);
+}
+
+.col-tab-btn.active {
+  color: var(--accent-color);
+  border-bottom-color: var(--accent-color);
+  font-weight: 600;
+}
+
+/* Empty Tab State */
+.collection-empty-tab {
+  flex-direction: column;
+  padding: 4rem 1rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.collection-empty-tab h3 {
+  font-size: 1.125rem;
+  margin: 0 0 0.25rem;
+  color: var(--text-secondary);
+}
+
+.collection-empty-tab p {
+  font-size: 0.875rem;
+  margin: 0;
+  max-width: 350px;
+  line-height: 1.5;
+}
+
+/* Floating Remove Item Button */
+.collection-item-wrapper {
+  transition: transform var(--transition-speed);
+}
+
+.collection-item-wrapper:hover {
+  transform: translateY(-2px);
+}
+
+.col-item-remove-btn {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  z-index: 10;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background-color: #ef4444;
+  color: #ffffff;
+  border: 2px solid var(--bg-primary);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  padding: 0;
+  transition: background-color var(--transition-speed), transform var(--transition-speed);
+}
+
+.col-item-remove-btn:hover {
+  background-color: #dc2626;
+  transform: scale(1.1);
+}
+
+/* Deleted catalog item card placeholder */
+.deleted-item-card {
+  padding: 2.5rem 1rem;
+  text-align: center;
+  height: 100%;
+  background-color: var(--bg-tertiary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  justify-content: center;
+}
+
+.deleted-title {
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.deleted-item-card p {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 0.25rem 0 0;
+  max-width: 150px;
+}
+
+/* Toast Notification styling */
+.global-toast {
+  position: fixed;
+  bottom: 2rem;
+  right: 2rem;
+  z-index: 2000;
+  box-shadow: var(--shadow-lg);
+  animation: slide-in 0.3s ease-out;
+}
+
+@keyframes slide-in {
+  from {
+    transform: translateY(100px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}

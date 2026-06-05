@@ -1,0 +1,461 @@
+import React, { useEffect, useState } from 'react';
+import api from '../services/api';
+import { useAuth } from '../context/AuthContext';
+import ClipCard from '../components/ClipCard';
+import { Video, Plus, Search, RotateCcw, X, AlertCircle } from 'lucide-react';
+
+const Clips = () => {
+  const { user, isAdmin } = useAuth();
+  const [clips, setClips] = useState([]);
+  const [moviesList, setMoviesList] = useState([]);
+  const [castList, setCastList] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  // Filters State
+  const [searchQuery, setSearchQuery] = useState('');
+  const [typeFilter, setTypeFilter] = useState('');
+
+  // Form Modal State
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [formError, setFormError] = useState('');
+  const [formLoading, setFormLoading] = useState(false);
+
+  // Form Fields
+  const [formData, setFormData] = useState({
+    title: '',
+    url: '',
+    description: '',
+    clipType: 'trailer',
+    movieId: '',
+    castInvolved: []
+  });
+
+  useEffect(() => {
+    fetchClipsData();
+    fetchMoviesAndCast();
+  }, []);
+
+  const fetchClipsData = async () => {
+    setLoading(true);
+    try {
+      const response = await api.get('/clips');
+      setClips(Array.isArray(response.data) ? response.data : []);
+    } catch (err) {
+      console.error('Failed to fetch clips:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const fetchMoviesAndCast = async () => {
+    try {
+      const [moviesRes, castRes] = await Promise.all([
+        api.get('/movies'),
+        api.get('/cast')
+      ]);
+      setMoviesList(moviesRes.data.movies || []);
+      setCastList(castRes.data.casts || []);
+    } catch (err) {
+      console.error('Failed to load form lookup data:', err);
+    }
+  };
+
+  const handleResetFilters = () => {
+    setSearchQuery('');
+    setTypeFilter('');
+  };
+
+  const handleDeleteClip = async (id) => {
+    if (!window.confirm('Are you sure you want to delete this clip?')) return;
+    try {
+      await api.delete(`/clips/${id}`);
+      setClips((prev) => prev.filter((c) => c._id !== id));
+    } catch (err) {
+      console.error('Failed to delete clip:', err);
+      alert(err.response?.data?.message || 'Delete failed.');
+    }
+  };
+
+  const handleInputChange = (e) => {
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleCastCheckboxChange = (castId) => {
+    setFormData((prev) => {
+      const current = prev.castInvolved;
+      const updated = current.includes(castId)
+        ? current.filter(id => id !== castId)
+        : [...current, castId];
+      return { ...prev, castInvolved: updated };
+    });
+  };
+
+  const handleAddClip = async (e) => {
+    e.preventDefault();
+    if (!formData.title || !formData.url || !formData.movieId) {
+      setFormError('Please fill in all required fields.');
+      return;
+    }
+
+    setFormError('');
+    setFormLoading(true);
+
+    try {
+      const response = await api.post('/clips', formData);
+      setClips((prev) => [response.data, ...prev]);
+      setShowAddModal(false);
+      // Reset form
+      setFormData({
+        title: '',
+        url: '',
+        description: '',
+        clipType: 'trailer',
+        movieId: '',
+        castInvolved: []
+      });
+    } catch (err) {
+      setFormError(err.response?.data?.message || 'Failed to add clip. Ensure URL is valid.');
+    } finally {
+      setFormLoading(false);
+    }
+  };
+
+  // Perform cascading filters locally
+  const filteredClips = clips.filter((clip) => {
+    const matchesSearch = clip.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (clip.description && clip.description.toLowerCase().includes(searchQuery.toLowerCase()));
+    const matchesType = typeFilter ? clip.clipType === typeFilter : true;
+    return matchesSearch && matchesType;
+  });
+
+  return (
+    <div className="container clips-container">
+      <header className="catalogue-header flex-between" style={{ flexWrap: 'wrap', gap: '1rem', marginBottom: '2rem' }}>
+        <div>
+          <h1>Video Clip Room</h1>
+          <p style={{ margin: 0 }}>Watch trailers, BTS interviews, and scenes mapped to your catalogue.</p>
+        </div>
+        <div className="flex-center" style={{ gap: '0.5rem' }}>
+          <button onClick={() => setShowAddModal(true)} className="btn btn-primary flex-center" style={{ gap: '0.375rem' }}>
+            <Plus size={16} />
+            <span>Add Video Clip</span>
+          </button>
+          <button onClick={handleResetFilters} className="btn flex-center" style={{ gap: '0.375rem' }}>
+            <RotateCcw size={14} />
+            <span>Reset</span>
+          </button>
+        </div>
+      </header>
+
+      {/* Filters Bar */}
+      <section className="filters-section">
+        <div className="search-bar-container">
+          <Search size={18} className="search-icon" />
+          <input
+            type="text"
+            className="form-input search-input"
+            placeholder="Search clips by title, keywords..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+          />
+        </div>
+
+        <div className="filters-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
+          {/* Clip Type Filter */}
+          <div className="filter-group">
+            <label className="form-label">Clip Type</label>
+            <select
+              value={typeFilter}
+              onChange={(e) => setTypeFilter(e.target.value)}
+              className="form-input select-filter"
+            >
+              <option value="">All Types</option>
+              <option value="trailer">Trailer</option>
+              <option value="scene">Scene</option>
+              <option value="interview">Interview</option>
+              <option value="song">Song</option>
+              <option value="bts">Behind the Scenes</option>
+              <option value="other">Other</option>
+            </select>
+          </div>
+        </div>
+      </section>
+
+      {/* Grid Content */}
+      {loading ? (
+        <div className="catalogue-loading flex-center">Loading clips catalogue...</div>
+      ) : filteredClips.length === 0 ? (
+        <div className="catalogue-empty">
+          <h3>No clips added</h3>
+          <p>Be the first to add a trailer or behind-the-scenes video for your tracked items!</p>
+          <button onClick={() => setShowAddModal(true)} className="btn btn-primary" style={{ marginTop: '1rem' }}>
+            Add Video Clip
+          </button>
+        </div>
+      ) : (
+        <div className="grid-cards">
+          {filteredClips.map((clip) => (
+            <ClipCard 
+              key={clip._id} 
+              clip={clip} 
+              onDelete={handleDeleteClip}
+              onEdit={null} // Simplified editing
+              currentUserId={user?._id}
+              isAdmin={isAdmin}
+            />
+          ))}
+        </div>
+      )}
+
+      {/* Add Clip Modal Popup */}
+      {showAddModal && (
+        <div className="modal-backdrop flex-center" onClick={() => setShowAddModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header flex-between">
+              <span className="modal-title">Add Video Clip Link</span>
+              <button onClick={() => setShowAddModal(false)} className="modal-close-btn flex-center">
+                <X size={20} />
+              </button>
+            </div>
+
+            {formError && (
+              <div className="alert alert-error flex-center" style={{ gap: '0.5rem', margin: '1rem' }}>
+                <AlertCircle size={16} />
+                <span>{formError}</span>
+              </div>
+            )}
+
+            <form onSubmit={handleAddClip} className="modal-form">
+              <div className="form-group">
+                <label className="form-label">Clip Title *</label>
+                <input 
+                  type="text" 
+                  name="title"
+                  className="form-input" 
+                  placeholder="e.g. Inception Main Trailer"
+                  value={formData.title}
+                  onChange={handleInputChange}
+                  required 
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Video URL (YouTube link preferred) *</label>
+                <input 
+                  type="url" 
+                  name="url"
+                  className="form-input" 
+                  placeholder="https://www.youtube.com/watch?v=..."
+                  value={formData.url}
+                  onChange={handleInputChange}
+                  required 
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Link to Movie/TV Series *</label>
+                <select 
+                  name="movieId"
+                  value={formData.movieId}
+                  onChange={handleInputChange}
+                  className="form-input"
+                  required
+                >
+                  <option value="">-- Select Title --</option>
+                  {moviesList.map((m) => (
+                    <option key={m._id} value={m._id}>{m.title} ({m.mediaType})</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Clip Type</label>
+                <select 
+                  name="clipType"
+                  value={formData.clipType}
+                  onChange={handleInputChange}
+                  className="form-input"
+                >
+                  <option value="trailer">Trailer</option>
+                  <option value="scene">Scene</option>
+                  <option value="interview">Interview</option>
+                  <option value="song">Song</option>
+                  <option value="bts">Behind the Scenes</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Description</label>
+                <textarea 
+                  name="description"
+                  className="form-input" 
+                  placeholder="Short note about this clip..."
+                  rows="2"
+                  value={formData.description}
+                  onChange={handleInputChange}
+                />
+              </div>
+
+              {/* Cast selection checkbox list */}
+              {castList.length > 0 && (
+                <div className="form-group">
+                  <label className="form-label">Involved Cast Members</label>
+                  <div className="modal-cast-selector">
+                    {castList.map((c) => (
+                      <label key={c._id} className="cast-checkbox-row flex-center" style={{ justifyContent: 'flex-start', gap: '0.5rem', margin: '0.25rem 0', cursor: 'pointer' }}>
+                        <input 
+                          type="checkbox" 
+                          checked={formData.castInvolved.includes(c._id)}
+                          onChange={() => handleCastCheckboxChange(c._id)}
+                        />
+                        <span>{c.name} ({c.gender === 'Female' ? 'Actress' : 'Actor'})</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <button type="submit" disabled={formLoading} className="btn btn-primary" style={{ width: '100%', minHeight: '44px', marginTop: '1rem' }}>
+                {formLoading ? 'Saving video details...' : 'Add Clip'}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      <style>{`
+        .clips-container {
+          padding-top: 2rem;
+          padding-bottom: 4rem;
+          text-align: left;
+        }
+        .catalogue-header h1 {
+          margin-bottom: 0.25rem;
+          border: none;
+          padding: 0;
+        }
+        
+        /* Filters Bar */
+        .filters-section {
+          background-color: var(--bg-secondary);
+          border: 1px solid var(--border-color);
+          border-radius: var(--border-radius);
+          padding: 1.5rem;
+          margin-bottom: 2rem;
+        }
+        .search-bar-container {
+          position: relative;
+          width: 100%;
+          margin-bottom: 1.25rem;
+        }
+        .search-icon {
+          position: absolute;
+          left: 1rem;
+          top: 50%;
+          transform: translateY(-50%);
+          color: var(--text-muted);
+          pointer-events: none;
+        }
+        .search-input {
+          padding-left: 2.75rem !important;
+        }
+        .filters-grid {
+          display: grid;
+          gap: 1rem;
+        }
+        @media (max-width: 640px) {
+          .filters-grid {
+            grid-template-columns: 1fr !important;
+          }
+        }
+        .filter-group {
+          margin-bottom: 0;
+        }
+        .select-filter {
+          cursor: pointer;
+        }
+        
+        .catalogue-loading {
+          padding: 6rem 0;
+          color: var(--text-muted);
+          font-size: 1rem;
+        }
+        .catalogue-empty {
+          text-align: center;
+          padding: 5rem 1rem;
+          background-color: var(--bg-secondary);
+          border: 1px dashed var(--border-color);
+          border-radius: var(--border-radius);
+          color: var(--text-secondary);
+        }
+        .catalogue-empty h3 {
+          font-size: 1.25rem;
+          font-weight: 600;
+          margin-bottom: 0.5rem;
+        }
+        .catalogue-empty p {
+          font-size: 0.875rem;
+          margin-bottom: 0;
+        }
+
+        /* Modal overlay */
+        .modal-backdrop {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100vw;
+          height: 100vh;
+          background-color: rgba(0,0,0,0.5);
+          z-index: 1000;
+          padding: 1.5rem;
+          overflow-y: auto;
+        }
+        .modal-content {
+          width: 100%;
+          max-width: 480px;
+          background-color: var(--bg-primary);
+          border: 1px solid var(--border-color);
+          border-radius: var(--border-radius);
+          box-shadow: var(--shadow-md);
+          overflow: hidden;
+          margin: auto;
+        }
+        .modal-header {
+          padding: 1rem 1.5rem;
+          background-color: var(--bg-secondary);
+          border-bottom: 1px solid var(--border-color);
+        }
+        .modal-title {
+          font-weight: 600;
+          font-size: 1.1rem;
+        }
+        .modal-close-btn {
+          background: none;
+          border: none;
+          color: var(--text-secondary);
+          cursor: pointer;
+          width: 32px;
+          height: 32px;
+        }
+        .modal-form {
+          padding: 1.5rem;
+        }
+        .modal-cast-selector {
+          max-height: 150px;
+          overflow-y: auto;
+          border: 1px solid var(--border-color);
+          padding: 0.5rem;
+          border-radius: var(--border-radius);
+          background-color: var(--bg-secondary);
+        }
+        .cast-checkbox-row span {
+          font-size: 0.875rem;
+        }
+      `}</style>
+    </div>
+  );
+};
+
+export default Clips;
