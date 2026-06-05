@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { Sun, Moon, LogOut, Menu, X, Film, Users, Heart, Video, FolderOpen, Shield, Search, User, Loader2 } from 'lucide-react';
-import api from '../services/api';
+import api, { getProxiedImageUrl } from '../services/api';
 import ExternalPreviewModal from './ExternalPreviewModal';
 
 const Navbar = () => {
