@@ -604,7 +604,9 @@ const runPopularSync = async () => {
 
     for (const item of popularMovies) {
       let movie = await Movie.findOne({ tmdbId: item.refId });
-      if (movie) {
+      const isComplete = movie && movie.posterUrl && movie.cast && movie.cast.length > 0;
+
+      if (movie && isComplete) {
         movie.isPopular = true;
         movie.posterUrl = item.posterUrl || movie.posterUrl;
         movie.synopsis = item.synopsis || movie.synopsis;
@@ -646,40 +648,68 @@ const runPopularSync = async () => {
             }
           }
 
-          const newMovie = new Movie({
-            title: details.title,
-            originalTitle: details.originalTitle || '',
-            language: details.language || 'English',
-            languages: details.languages || ['English'],
-            genre: details.genre || [],
-            releaseDate: details.releaseDate,
-            status: details.status || 'released',
-            mediaType: 'movie',
-            posterUrl: details.posterUrl || '',
-            bannerUrl: details.bannerUrl || '',
-            synopsis: details.synopsis || '',
-            rating: details.rating || 0,
-            imdbId: details.imdbId || '',
-            tmdbId: details.tmdbId || '',
-            dataSource: 'tmdb',
-            isPopular: true,
-            cast: processedCast
-          });
-          await newMovie.save();
+          if (movie) {
+            // Update the existing movie to heal empty/incomplete data
+            movie.originalTitle = details.originalTitle || movie.originalTitle;
+            movie.language = details.language || movie.language;
+            movie.languages = details.languages || movie.languages;
+            movie.genre = details.genre || movie.genre;
+            movie.releaseDate = details.releaseDate || movie.releaseDate;
+            movie.status = details.status || movie.status;
+            movie.posterUrl = details.posterUrl || movie.posterUrl;
+            movie.bannerUrl = details.bannerUrl || movie.bannerUrl;
+            movie.synopsis = details.synopsis || movie.synopsis;
+            movie.rating = details.rating || movie.rating;
+            movie.imdbId = details.imdbId || movie.imdbId;
+            movie.dataSource = 'tmdb';
+            movie.isPopular = true;
+            movie.cast = processedCast;
+            await movie.save();
+          } else {
+            // Create a new movie
+            const newMovie = new Movie({
+              title: details.title,
+              originalTitle: details.originalTitle || '',
+              language: details.language || 'English',
+              languages: details.languages || ['English'],
+              genre: details.genre || [],
+              releaseDate: details.releaseDate,
+              status: details.status || 'released',
+              mediaType: 'movie',
+              posterUrl: details.posterUrl || '',
+              bannerUrl: details.bannerUrl || '',
+              synopsis: details.synopsis || '',
+              rating: details.rating || 0,
+              imdbId: details.imdbId || '',
+              tmdbId: details.tmdbId || '',
+              dataSource: 'tmdb',
+              isPopular: true,
+              cast: processedCast
+            });
+            await newMovie.save();
+          }
         } catch (movieErr) {
           console.warn(`Full cache failed for popular movie ID ${item.refId}:`, movieErr.message);
-          const fallbackMovie = new Movie({
-            title: item.title,
-            originalTitle: item.originalTitle || '',
-            releaseDate: item.releaseDate,
-            posterUrl: item.posterUrl,
-            synopsis: item.synopsis,
-            tmdbId: item.refId,
-            dataSource: item.source || 'tmdb',
-            isPopular: true,
-            genre: item.genre || []
-          });
-          await fallbackMovie.save();
+          if (movie) {
+            movie.isPopular = true;
+            movie.posterUrl = item.posterUrl || movie.posterUrl;
+            movie.synopsis = item.synopsis || movie.synopsis;
+            movie.rating = item.rating || movie.rating;
+            await movie.save();
+          } else {
+            const fallbackMovie = new Movie({
+              title: item.title,
+              originalTitle: item.originalTitle || '',
+              releaseDate: item.releaseDate,
+              posterUrl: item.posterUrl,
+              synopsis: item.synopsis,
+              tmdbId: item.refId,
+              dataSource: item.source || 'tmdb',
+              isPopular: true,
+              genre: item.genre || []
+            });
+            await fallbackMovie.save();
+          }
         }
       }
     }
