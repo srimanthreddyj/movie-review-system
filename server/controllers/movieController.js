@@ -340,13 +340,75 @@ exports.getMovies = async (req, res) => {
   }
 };
 
-// 5. Get Movie by ID (Detail with cast resolved)
+// 5. Get Movie by ID (Detail with cast resolved, self-healing if incomplete)
 exports.getMovieById = async (req, res) => {
   try {
-    const movie = await Movie.findById(req.params.id).populate('cast.castId');
+    let movie = await Movie.findById(req.params.id).populate('cast.castId');
     if (!movie) {
       return res.status(404).json({ message: 'Movie not found' });
     }
+
+    // Self-healing: if the movie was imported with missing details (e.g. locally where TMDB is blocked),
+    // and we are running on Render where TMDB works, we fetch the details and save them to MongoDB.
+    const isComplete = movie.posterUrl && movie.cast && movie.cast.length > 0;
+    if (!isComplete && movie.tmdbId && movie.dataSource === 'tmdb') {
+      console.log(`Self-healing triggered for Movie details: "${movie.title}" (${movie._id})...`);
+      try {
+        const movieApiService = require('../services/movieApiService');
+        const details = await movieApiService.getMovieDetails(movie.tmdbId, 'tmdb', movie.title, 'movie');
+        
+        const processedCast = [];
+        if (details.cast && Array.isArray(details.cast)) {
+          for (const actor of details.cast) {
+            if (!actor.name) continue;
+            let castMember = await Cast.findOne({
+              $or: [{ tmdbId: actor.tmdbId }, { name: actor.name }]
+            });
+            if (!castMember) {
+              castMember = new Cast({
+                name: actor.name,
+                photoUrl: actor.photoUrl || '',
+                bio: actor.bio || '',
+                gender: actor.gender || 'Unspecified',
+                tmdbId: actor.tmdbId || '',
+                knownFor: actor.knownFor || 'Actor',
+                dataSource: 'tmdb'
+              });
+              await castMember.save();
+            } else if (actor.tmdbId && !castMember.tmdbId) {
+              castMember.tmdbId = actor.tmdbId;
+              await castMember.save();
+            }
+            processedCast.push({
+              castId: castMember._id,
+              characterName: actor.characterName || '',
+              role: actor.role || 'Actor'
+            });
+          }
+        }
+
+        movie.originalTitle = details.originalTitle || movie.originalTitle;
+        movie.language = details.language || movie.language;
+        movie.languages = details.languages || movie.languages;
+        movie.genre = details.genre || movie.genre;
+        movie.releaseDate = details.releaseDate || movie.releaseDate;
+        movie.status = details.status || movie.status;
+        movie.posterUrl = details.posterUrl || movie.posterUrl;
+        movie.bannerUrl = details.bannerUrl || movie.bannerUrl;
+        movie.synopsis = details.synopsis || movie.synopsis;
+        movie.rating = details.rating || movie.rating;
+        movie.imdbId = details.imdbId || movie.imdbId;
+        movie.cast = processedCast;
+        await movie.save();
+
+        // Re-populate and assign updated movie
+        movie = await Movie.findById(movie._id).populate('cast.castId');
+        console.log(`Self-healing completed for Movie details: "${movie.title}"`);
+      } catch (err) {
+        console.warn(`Self-healing failed for Movie details: "${movie.title}":`, err.message);
+      }
+    }
+
     res.json(movie);
   } catch (error) {
     res.status(500).json({ message: 'Fetching movie details failed', error: error.message });
