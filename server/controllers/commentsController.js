@@ -16,6 +16,10 @@ exports.getComments = async (req, res) => {
       return res.status(400).json({ message: 'Invalid entityType. Must be movie, cast, or clip.' });
     }
 
+    if (entityId.toString().startsWith('tmdb-')) {
+      return res.json([]);
+    }
+
     const comments = await Comment.find({
       userId: req.user.id,
       entityType,

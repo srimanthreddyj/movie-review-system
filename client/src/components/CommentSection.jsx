@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import { MessageSquare, Edit2, Trash2, Check, X, AlertCircle } from 'lucide-react';
 
-const CommentSection = ({ entityType, entityId }) => {
+const CommentSection = ({ entityType, entityId, onBeforeAddComment }) => {
   const [comments, setComments] = useState([]);
   const [loading, setLoading] = useState(false);
   const [newText, setNewText] = useState('');
@@ -38,9 +38,13 @@ const CommentSection = ({ entityType, entityId }) => {
 
     setError('');
     try {
+      let activeEntityId = entityId;
+      if (onBeforeAddComment) {
+        activeEntityId = await onBeforeAddComment();
+      }
       const response = await api.post('/comments', {
         entityType,
-        entityId,
+        entityId: activeEntityId,
         text: newText
       });
       setComments((prev) => [response.data, ...prev]);

@@ -146,28 +146,7 @@ const CastDetail = () => {
 
   return (
     <div className="container detail-container">
-      {/* External Preview Warning Banner */}
-      {isExternal && (
-        <div className="flex-between" style={{
-          backgroundColor: 'var(--accent-light)',
-          border: '1px solid var(--accent-color)',
-          padding: '1rem',
-          borderRadius: 'var(--border-radius)',
-          marginBottom: '1.5rem',
-          flexWrap: 'wrap',
-          gap: '1rem'
-        }}>
-          <div className="flex-center" style={{ gap: '0.5rem', textAlign: 'left' }}>
-            <Sparkles size={18} className="ai-spark-icon" style={{ color: 'var(--accent-color)' }} />
-            <span style={{ fontSize: '0.9rem', fontWeight: '500', color: 'var(--text-primary)' }}>
-              This cast member is a live preview from TMDB. Save them to CineTrack to enable private notes and collections.
-            </span>
-          </div>
-          <button onClick={ensureImported} className="btn btn-accent btn-sm flex-center">
-            Save to Catalogue
-          </button>
-        </div>
-      )}
+
 
       {/* Back button */}
       <Link to="/cast" className="back-link flex-center" style={{ justifyContent: 'flex-start', marginBottom: '1.5rem', gap: '0.25rem' }}>
@@ -287,20 +266,15 @@ const CastDetail = () => {
       </div>
 
       {/* Private Notes Section */}
-      {isExternal ? (
-        <div className="comment-section" style={{ textAlign: 'center', padding: '2.5rem 1rem', marginTop: '2rem' }}>
-          <MessageSquare size={36} style={{ color: 'var(--text-muted)', opacity: 0.6, marginBottom: '0.75rem' }} />
-          <h3 style={{ fontSize: '1.125rem', margin: 0 }}>Reviews and Notes are locked</h3>
-          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', maxWidth: '340px', margin: '0.5rem auto 1rem auto' }}>
-            Private personal notes, reviews, and logs are disabled for previews. Save this profile to your database to start taking notes.
-          </p>
-          <button onClick={ensureImported} className="btn btn-secondary btn-sm">
-            Save to Catalogue
-          </button>
-        </div>
-      ) : (
-        <CommentSection entityType="cast" entityId={id} />
-      )}
+      <CommentSection 
+        entityType="cast" 
+        entityId={id} 
+        onBeforeAddComment={isExternal ? async () => {
+          const localId = await ensureImported();
+          navigate(`/cast/${localId}`, { replace: true });
+          return localId;
+        } : undefined}
+      />
 
       <AddToCollectionModal 
         isOpen={isCollectionModalOpen}
