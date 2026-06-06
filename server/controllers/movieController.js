@@ -739,7 +739,7 @@ const runPopularSync = async () => {
 };
 
 // Helper: check popular cache metadata
-const refreshPopularCacheIfExpired = async () => {
+const refreshPopularCacheIfExpired = async (force = false) => {
   try {
     const CacheMetadata = require('../models/CacheMetadata');
     const cacheKey = 'popular_cache';
@@ -747,8 +747,8 @@ const refreshPopularCacheIfExpired = async () => {
     const now = new Date();
     const sevenDaysInMs = 7 * 24 * 60 * 60 * 1000;
 
-    if (!cache || (now - cache.lastUpdated > sevenDaysInMs)) {
-      console.log('Popular cache expired or missing. Triggering weekly background cache update...');
+    if (force || !cache || (now - cache.lastUpdated > sevenDaysInMs)) {
+      console.log(force ? 'Force sync requested. Triggering popular cache update...' : 'Popular cache expired or missing. Triggering weekly background cache update...');
       runPopularSync()
         .then(async () => {
           let cacheToSave = await CacheMetadata.findOne({ key: cacheKey });
@@ -770,7 +770,8 @@ const refreshPopularCacheIfExpired = async () => {
 // Controller: Get popular movies (with weekly cache refresh check)
 exports.getPopularMovies = async (req, res) => {
   try {
-    await refreshPopularCacheIfExpired();
+    const forceSync = req.query.forceSync === 'true';
+    await refreshPopularCacheIfExpired(forceSync);
     const popular = await Movie.find({ isPopular: true }).sort({ rating: -1, releaseDate: -1 }).limit(20);
 
     const formatted = popular.map(movie => ({
