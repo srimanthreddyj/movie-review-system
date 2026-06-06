@@ -7,6 +7,7 @@ const AddToCollectionModal = ({ isOpen, onClose, entityType, entityId }) => {
   const [loading, setLoading] = useState(true);
   const [newColName, setNewColName] = useState('');
   const [newColDesc, setNewColDesc] = useState('');
+  const [newColCover, setNewColCover] = useState('');
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [dialogInfo, setDialogInfo] = useState(null); // { type: 'success' | 'error', title: '...', message: '...' }
 
@@ -41,13 +42,14 @@ const AddToCollectionModal = ({ isOpen, onClose, entityType, entityId }) => {
       const res = await api.post('/collections', {
         name: newColName.trim(),
         description: newColDesc.trim(),
-        coverImage: ''
+        coverImage: newColCover.trim()
       });
       
       // Add newly created collection to list
       setCollections((prev) => [res.data, ...prev]);
       setNewColName('');
       setNewColDesc('');
+      setNewColCover('');
       setShowCreateForm(false);
 
       // Trigger custom success dialog box
@@ -231,45 +233,41 @@ const AddToCollectionModal = ({ isOpen, onClose, entityType, entityId }) => {
                 <X size={20} />
               </button>
             </div>
-            <form onSubmit={handleCreateCollection} style={{ padding: '1rem' }}>
-              <div className="form-group" style={{ marginBottom: '0.75rem' }}>
-                <label className="form-label" style={{ fontSize: '0.813rem' }}>Collection Name *</label>
+            <form onSubmit={handleCreateCollection} className="modal-form">
+              <div className="form-group">
+                <label className="form-label">Collection Name *</label>
                 <input 
                   type="text" 
                   className="form-input" 
-                  placeholder="e.g. My Favourites 2026"
+                  placeholder="e.g. Action Thrillers"
                   value={newColName}
                   onChange={(e) => setNewColName(e.target.value)}
                   required 
                 />
               </div>
-              <div className="form-group" style={{ marginBottom: '1rem' }}>
-                <label className="form-label" style={{ fontSize: '0.813rem' }}>Description</label>
+              <div className="form-group">
+                <label className="form-label">Description</label>
                 <textarea 
                   className="form-input" 
-                  placeholder="What's this collection about..."
+                  placeholder="Describe what goes into this collection..."
                   rows="2"
                   value={newColDesc}
                   onChange={(e) => setNewColDesc(e.target.value)}
                 />
               </div>
-              <div className="flex-center" style={{ gap: '0.5rem' }}>
-                <button 
-                  type="button" 
-                  className="btn btn-secondary" 
-                  style={{ flex: 1 }}
-                  onClick={() => setShowCreateForm(false)}
-                >
-                  Cancel
-                </button>
-                <button 
-                  type="submit" 
-                  className="btn btn-primary" 
-                  style={{ flex: 1 }}
-                >
-                  Create
-                </button>
+              <div className="form-group">
+                <label className="form-label">Cover Image URL</label>
+                <input 
+                  type="url" 
+                  className="form-input" 
+                  placeholder="https://example.com/image.jpg"
+                  value={newColCover}
+                  onChange={(e) => setNewColCover(e.target.value)}
+                />
               </div>
+              <button type="submit" className="btn btn-primary" style={{ width: '100%', minHeight: '44px', marginTop: '1rem' }}>
+                Create Collection
+              </button>
             </form>
           </div>
         </div>
