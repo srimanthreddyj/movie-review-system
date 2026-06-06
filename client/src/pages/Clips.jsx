@@ -30,6 +30,52 @@ const Clips = () => {
     castInvolved: []
   });
 
+  // Selected Cast & Search States
+  const [selectedCast, setSelectedCast] = useState([]);
+  const [castSearchQuery, setCastSearchQuery] = useState('');
+  const [castSearchResults, setCastSearchResults] = useState([]);
+  const [searchingCast, setSearchingCast] = useState(false);
+
+  const handleCastSearchChange = async (e) => {
+    const query = e.target.value;
+    setCastSearchQuery(query);
+    if (!query.trim()) {
+      setCastSearchResults([]);
+      return;
+    }
+    
+    setSearchingCast(true);
+    try {
+      const res = await api.get('/cast/search-external', {
+        params: { q: query }
+      });
+      setCastSearchResults(res.data || []);
+    } catch (err) {
+      console.error('Failed to search external cast:', err);
+    } finally {
+      setSearchingCast(false);
+    }
+  };
+
+  const handleAddSelectedCast = (cast) => {
+    const isAlreadySelected = selectedCast.some(c => 
+      (c._id && cast._id && c._id === cast._id) || 
+      (c.tmdbId && cast.tmdbId && c.tmdbId === cast.tmdbId)
+    );
+    if (!isAlreadySelected) {
+      setSelectedCast(prev => [...prev, cast]);
+    }
+    setCastSearchQuery('');
+    setCastSearchResults([]);
+  };
+
+  const handleRemoveSelectedCast = (cast) => {
+    setSelectedCast(prev => prev.filter(c => 
+      !((c._id && cast._id && c._id === cast._id) || 
+        (c.tmdbId && cast.tmdbId && c.tmdbId === cast.tmdbId))
+    ));
+  };
+
   useEffect(() => {
     fetchClipsData();
     fetchMoviesAndCast();
@@ -102,7 +148,30 @@ const Clips = () => {
     setFormLoading(true);
 
     try {
-      const response = await api.post('/clips', formData);
+      // Resolve all selected external cast members to local IDs (duplicate-safe)
+      const resolvedCastIds = await Promise.all(selectedCast.map(async (cast) => {
+        if (cast.source === 'local' || !cast.source) {
+          return cast.refId || cast._id;
+        } else {
+          try {
+            const res = await api.post('/cast/import-external', {
+              tmdbId: cast.tmdbId || cast.refId,
+              name: cast.name
+            });
+            return res.data._id;
+          } catch (importErr) {
+            console.error(`Failed to import cast member ${cast.name} on clip save:`, importErr);
+            throw new Error(`Failed to import cast member "${cast.name}".`);
+          }
+        }
+      }));
+
+      const finalFormData = {
+        ...formData,
+        castInvolved: resolvedCastIds
+      };
+
+      const response = await api.post('/clips', finalFormData);
       setClips((prev) => [response.data, ...prev]);
       setShowAddModal(false);
       // Reset form
@@ -114,8 +183,11 @@ const Clips = () => {
         movieId: '',
         castInvolved: []
       });
+      setSelectedCast([]);
+      setCastSearchQuery('');
+      setCastSearchResults([]);
     } catch (err) {
-      setFormError(err.response?.data?.message || 'Failed to add clip. Ensure URL is valid.');
+      setFormError(err.message || err.response?.data?.message || 'Failed to add clip. Ensure URL is valid.');
     } finally {
       setFormLoading(false);
     }
@@ -298,24 +370,65 @@ const Clips = () => {
                 />
               </div>
 
-              {/* Cast selection checkbox list */}
-              {castList.length > 0 && (
-                <div className="form-group">
-                  <label className="form-label">Involved Cast Members</label>
-                  <div className="modal-cast-selector">
-                    {castList.map((c) => (
-                      <label key={c._id} className="cast-checkbox-row flex-center" style={{ justifyContent: 'flex-start', gap: '0.5rem', margin: '0.25rem 0', cursor: 'pointer' }}>
-                        <input 
-                          type="checkbox" 
-                          checked={formData.castInvolved.includes(c._id)}
-                          onChange={() => handleCastCheckboxChange(c._id)}
-                        />
-                        <span>{c.name} ({c.gender === 'Female' ? 'Actress' : 'Actor'})</span>
-                      </label>
+              {/* Cast selection search input and result list */}
+              <div className="form-group" style={{ position: 'relative' }}>
+                <label className="form-label">Involved Cast Members</label>
+                
+                {/* Selected Cast Pills */}
+                {selectedCast.length > 0 && (
+                  <div className="selected-cast-list flex-center" style={{ justifyContent: 'flex-start', flexWrap: 'wrap', gap: '0.375rem', marginBottom: '0.75rem' }}>
+                    {selectedCast.map(cast => (
+                      <span key={cast.refId || cast._id} className="cast-pill flex-center">
+                        <span>{cast.name}</span>
+                        <button type="button" onClick={() => handleRemoveSelectedCast(cast)} className="remove-cast-pill-btn">
+                          <X size={12} />
+                        </button>
+                      </span>
                     ))}
                   </div>
-                </div>
-              )}
+                )}
+
+                {/* Cast Search Input */}
+                <input 
+                  type="text" 
+                  placeholder="Search cast members to add..." 
+                  value={castSearchQuery}
+                  onChange={handleCastSearchChange}
+                  className="form-input"
+                  style={{ minHeight: '38px', fontSize: '0.813rem' }}
+                />
+
+                {/* Searching Loader Indicator */}
+                {searchingCast && (
+                  <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Searching cast...</div>
+                )}
+
+                {/* Search Results Dropdown List */}
+                {castSearchResults.length > 0 && (
+                  <div className="cast-search-results-list">
+                    {castSearchResults.map((cast) => {
+                      const isAdded = selectedCast.some(c => 
+                        (c._id && cast._id && c._id === cast._id) || 
+                        (c.tmdbId && cast.tmdbId && c.tmdbId === cast.tmdbId)
+                      );
+                      
+                      return (
+                        <div 
+                          key={cast.refId || cast._id} 
+                          className="cast-search-result-row flex-between"
+                          onClick={() => !isAdded && handleAddSelectedCast(cast)}
+                          style={{ opacity: isAdded ? 0.5 : 1, cursor: isAdded ? 'default' : 'pointer' }}
+                        >
+                          <span>{cast.name} ({cast.knownForDepartment || (cast.gender === 'Female' ? 'Actress' : 'Actor')}){cast.source === 'tmdb' ? ' - TMDB' : ' - Catalog'}</span>
+                          {!isAdded && (
+                            <span style={{ fontSize: '0.75rem', color: 'var(--accent-color)', fontWeight: '600' }}>Add</span>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
 
               <button type="submit" disabled={formLoading} className="btn btn-primary" style={{ width: '100%', minHeight: '44px', marginTop: '1rem' }}>
                 {formLoading ? 'Saving video details...' : 'Add Clip'}
@@ -452,6 +565,55 @@ const Clips = () => {
         }
         .cast-checkbox-row span {
           font-size: 0.875rem;
+        }
+        .cast-pill {
+          background-color: var(--bg-tertiary);
+          border: 1px solid var(--border-color);
+          border-radius: 20px;
+          padding: 0.25rem 0.75rem;
+          font-size: 0.813rem;
+          font-weight: 500;
+          color: var(--text-primary);
+          gap: 0.375rem;
+        }
+        .remove-cast-pill-btn {
+          background: none;
+          border: none;
+          color: var(--text-muted);
+          cursor: pointer;
+          padding: 0;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+        }
+        .remove-cast-pill-btn:hover {
+          color: #ef4444;
+        }
+        .cast-search-results-list {
+          border: 1px solid var(--border-color);
+          border-top: none;
+          border-radius: 0 0 var(--border-radius) var(--border-radius);
+          max-height: 160px;
+          overflow-y: auto;
+          background-color: var(--bg-primary);
+          position: absolute;
+          width: 100%;
+          z-index: 10;
+          box-shadow: var(--shadow-sm);
+        }
+        .cast-search-result-row {
+          padding: 0.5rem 0.75rem;
+          border-bottom: 1px solid var(--border-color);
+          cursor: pointer;
+          font-size: 0.813rem;
+          transition: background-color 0.15s;
+          text-align: left;
+        }
+        .cast-search-result-row:last-child {
+          border-bottom: none;
+        }
+        .cast-search-result-row:hover {
+          background-color: var(--bg-tertiary);
         }
       `}</style>
     </div>
