@@ -19,7 +19,7 @@ const queryGemini = async (prompt) => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('Gemini API Key missing');
 
-  const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+  const models = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash'];
   let lastError;
   for (const model of models) {
     try {
@@ -30,7 +30,7 @@ const queryGemini = async (prompt) => {
         body: JSON.stringify({
           contents: [{ parts: [{ text: prompt }] }]
         })
-      });
+      }, 40000);
 
       if (response.ok) {
         const data = await response.json();
@@ -692,7 +692,7 @@ exports.searchExternalPersons = async (query) => {
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }]
       })
-    });
+    }, 40000);
 
     if (response.ok) {
       const data = await response.json();
@@ -825,7 +825,7 @@ exports.searchExternalMulti = async (query) => {
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }]
       })
-    });
+    }, 40000);
 
     if (response.ok) {
       const data = await response.json();
@@ -840,55 +840,153 @@ exports.searchExternalMulti = async (query) => {
   return [];
 };
 
+const getPopularMoviesFromGemini = async () => {
+  const geminiApiKey = process.env.GEMINI_API_KEY;
+  if (!geminiApiKey) throw new Error('Gemini API Key missing for fallback');
+
+  console.log('API Service: TMDB popular movies failed. Fetching popular movies from Gemini...');
+
+  const prompt = `
+    Provide a list of 20 highly popular and critically acclaimed movies.
+    Return the response ONLY as a valid JSON array of objects. Do not wrap in markdown or backticks.
+    Format:
+    [
+      {
+        "title": "Movie Title",
+        "originalTitle": "",
+        "releaseDate": "YYYY-MM-DD",
+        "posterUrl": "",
+        "refId": "gemini-popular-slug",
+        "source": "gemini",
+        "mediaType": "movie",
+        "synopsis": "A brief synopsis",
+        "genre": ["Action", "Drama"]
+      }
+    ]
+  `;
+
+  try {
+    const text = await queryGemini(prompt);
+    const cleanJson = text.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
+    const results = JSON.parse(cleanJson);
+    return results.map((movie, idx) => ({
+      title: movie.title,
+      originalTitle: movie.originalTitle || '',
+      releaseDate: movie.releaseDate ? new Date(movie.releaseDate) : null,
+      posterUrl: movie.posterUrl || '',
+      refId: movie.refId || `gemini-popular-${idx}`,
+      source: 'gemini',
+      mediaType: 'movie',
+      synopsis: movie.synopsis || '',
+      genre: movie.genre || []
+    }));
+  } catch (err) {
+    console.error('Gemini popular movies fallback failed:', err.message);
+    throw err;
+  }
+};
+
+const getPopularCastFromGemini = async () => {
+  const geminiApiKey = process.env.GEMINI_API_KEY;
+  if (!geminiApiKey) throw new Error('Gemini API Key missing for fallback');
+
+  console.log('API Service: TMDB popular cast failed. Fetching popular cast from Gemini...');
+
+  const prompt = `
+    Provide a list of 20 highly popular actors and actresses in the film industry.
+    Return the response ONLY as a valid JSON array of objects. Do not wrap in markdown or backticks.
+    Format:
+    [
+      {
+        "name": "Person Name",
+        "tmdbId": "",
+        "photoUrl": "",
+        "gender": "Male | Female | Non-binary",
+        "knownForDepartment": "Acting",
+        "knownFor": "Known movies list",
+        "source": "gemini"
+      }
+    ]
+  `;
+
+  try {
+    const text = await queryGemini(prompt);
+    const cleanJson = text.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
+    const results = JSON.parse(cleanJson);
+    return results.map((person, idx) => ({
+      name: person.name,
+      tmdbId: person.tmdbId || `gemini-cast-${idx}`,
+      photoUrl: person.photoUrl || '',
+      gender: person.gender || 'Unspecified',
+      knownForDepartment: person.knownForDepartment || 'Acting',
+      knownFor: person.knownFor || '',
+      source: 'gemini'
+    }));
+  } catch (err) {
+    console.error('Gemini popular cast fallback failed:', err.message);
+    throw err;
+  }
+};
+
 // Fetch top 20 popular movies from TMDB
 exports.getPopularMovies = async () => {
-  const apiKey = process.env.TMDB_API_KEY;
-  if (!apiKey) throw new Error('TMDB API Key missing');
+  try {
+    const apiKey = process.env.TMDB_API_KEY;
+    if (!apiKey) throw new Error('TMDB API Key missing');
 
-  const url = `https://api.themoviedb.org/3/movie/popular?api_key=${apiKey}&language=en-US&page=1`;
-  const res = await fetchWithTimeout(url);
-  if (!res.ok) throw new Error(`TMDB Popular Movies fetch failed: ${res.statusText}`);
-  const data = await res.json();
+    const url = `https://api.themoviedb.org/3/movie/popular?api_key=${apiKey}&language=en-US&page=1`;
+    const res = await fetchWithTimeout(url);
+    if (!res.ok) throw new Error(`TMDB Popular Movies fetch failed: ${res.statusText}`);
+    const data = await res.json();
 
-  const genreMap = {
-    28: 'Action', 12: 'Adventure', 16: 'Animation', 35: 'Comedy', 80: 'Crime',
-    99: 'Documentary', 18: 'Drama', 10751: 'Family', 14: 'Fantasy', 36: 'History',
-    27: 'Horror', 10402: 'Music', 9648: 'Mystery', 10749: 'Romance', 878: 'Sci-Fi',
-    10770: 'TV Movie', 53: 'Thriller', 10752: 'War', 37: 'Western'
-  };
+    const genreMap = {
+      28: 'Action', 12: 'Adventure', 16: 'Animation', 35: 'Comedy', 80: 'Crime',
+      99: 'Documentary', 18: 'Drama', 10751: 'Family', 14: 'Fantasy', 36: 'History',
+      27: 'Horror', 10402: 'Music', 9648: 'Mystery', 10749: 'Romance', 878: 'Sci-Fi',
+      10770: 'TV Movie', 53: 'Thriller', 10752: 'War', 37: 'Western'
+    };
 
-  return (data.results || []).map(movie => ({
-    title: movie.title,
-    originalTitle: movie.original_title || '',
-    releaseDate: movie.release_date ? new Date(movie.release_date) : null,
-    posterUrl: getTmdbImageUrl(movie.poster_path),
-    refId: movie.id.toString(),
-    source: 'tmdb',
-    mediaType: 'movie',
-    synopsis: movie.overview || '',
-    genre: (movie.genre_ids || []).map(id => genreMap[id]).filter(Boolean)
-  }));
+    return (data.results || []).map(movie => ({
+      title: movie.title,
+      originalTitle: movie.original_title || '',
+      releaseDate: movie.release_date ? new Date(movie.release_date) : null,
+      posterUrl: getTmdbImageUrl(movie.poster_path),
+      refId: movie.id.toString(),
+      source: 'tmdb',
+      mediaType: 'movie',
+      synopsis: movie.overview || '',
+      genre: (movie.genre_ids || []).map(id => genreMap[id]).filter(Boolean)
+    }));
+  } catch (err) {
+    console.warn('TMDB popular movies fetch failed. Calling Gemini fallback...', err.message);
+    return await getPopularMoviesFromGemini();
+  }
 };
 
 // Fetch top 20 popular cast members (persons) from TMDB
 exports.getPopularCast = async () => {
-  const apiKey = process.env.TMDB_API_KEY;
-  if (!apiKey) throw new Error('TMDB API Key missing');
+  try {
+    const apiKey = process.env.TMDB_API_KEY;
+    if (!apiKey) throw new Error('TMDB API Key missing');
 
-  const url = `https://api.themoviedb.org/3/person/popular?api_key=${apiKey}&language=en-US&page=1`;
-  const res = await fetchWithTimeout(url);
-  if (!res.ok) throw new Error(`TMDB Popular Persons fetch failed: ${res.statusText}`);
-  const data = await res.json();
+    const url = `https://api.themoviedb.org/3/person/popular?api_key=${apiKey}&language=en-US&page=1`;
+    const res = await fetchWithTimeout(url);
+    if (!res.ok) throw new Error(`TMDB Popular Persons fetch failed: ${res.statusText}`);
+    const data = await res.json();
 
-  return (data.results || []).map(person => ({
-    name: person.name,
-    tmdbId: person.id.toString(),
-    photoUrl: getTmdbImageUrl(person.profile_path),
-    gender: mapGender(person.gender),
-    knownForDepartment: person.known_for_department || 'Acting',
-    knownFor: (person.known_for || []).map(item => item.title || item.name || '').filter(Boolean).join(', '),
-    source: 'tmdb'
-  }));
+    return (data.results || []).map(person => ({
+      name: person.name,
+      tmdbId: person.id.toString(),
+      photoUrl: getTmdbImageUrl(person.profile_path),
+      gender: mapGender(person.gender),
+      knownForDepartment: person.known_for_department || 'Acting',
+      knownFor: (person.known_for || []).map(item => item.title || item.name || '').filter(Boolean).join(', '),
+      source: 'tmdb'
+    }));
+  } catch (err) {
+    console.warn('TMDB popular cast fetch failed. Calling Gemini fallback...', err.message);
+    return await getPopularCastFromGemini();
+  }
 };
 
 

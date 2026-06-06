@@ -585,8 +585,15 @@ exports.autocomplete = async (req, res) => {
   }
 };
 
+let isSyncingPopular = false;
+
 // Helper to run background popular movies & cast cache sync
 const runPopularSync = async () => {
+  if (isSyncingPopular) {
+    console.log('Background Cache Sync: Already syncing, skipping parallel run.');
+    return;
+  }
+  isSyncingPopular = true;
   const movieApiService = require('../services/movieApiService');
   console.log('Background Cache Sync: Starting fetching popular content from TMDB...');
 
@@ -605,6 +612,9 @@ const runPopularSync = async () => {
         await movie.save();
       } else {
         try {
+          if (item.source === 'gemini') {
+            throw new Error('Gemini source early bypass');
+          }
           const details = await movieApiService.getMovieDetails(item.refId, 'tmdb', item.title, 'movie');
           const processedCast = [];
           if (details.cast && Array.isArray(details.cast)) {
@@ -665,7 +675,7 @@ const runPopularSync = async () => {
             posterUrl: item.posterUrl,
             synopsis: item.synopsis,
             tmdbId: item.refId,
-            dataSource: 'tmdb',
+            dataSource: item.source || 'tmdb',
             isPopular: true,
             genre: item.genre || []
           });
@@ -686,6 +696,9 @@ const runPopularSync = async () => {
         await castMember.save();
       } else {
         try {
+          if (item.source === 'gemini') {
+            throw new Error('Gemini source early bypass');
+          }
           const details = await movieApiService.getTmdbPersonDetails(item.tmdbId);
           const newCast = new Cast({
             name: details.name,
@@ -708,7 +721,7 @@ const runPopularSync = async () => {
             gender: item.gender,
             knownFor: item.knownForDepartment || 'Actor',
             tmdbId: item.tmdbId,
-            dataSource: 'tmdb',
+            dataSource: item.source || 'tmdb',
             isPopular: true
           });
           await fallbackCast.save();
@@ -719,6 +732,9 @@ const runPopularSync = async () => {
     console.log('Background Cache Sync: Weekly sync completed successfully.');
   } catch (err) {
     console.error('Background Cache Sync failed:', err.message);
+    throw err;
+  } finally {
+    isSyncingPopular = false;
   }
 };
 
@@ -733,13 +749,18 @@ const refreshPopularCacheIfExpired = async () => {
 
     if (!cache || (now - cache.lastUpdated > sevenDaysInMs)) {
       console.log('Popular cache expired or missing. Triggering weekly background cache update...');
-      if (!cache) {
-        cache = new CacheMetadata({ key: cacheKey, lastUpdated: now });
-      } else {
-        cache.lastUpdated = now;
-      }
-      await cache.save();
-      runPopularSync().catch(err => console.error('Popular sync trigger failed:', err.message));
+      runPopularSync()
+        .then(async () => {
+          let cacheToSave = await CacheMetadata.findOne({ key: cacheKey });
+          if (!cacheToSave) {
+            cacheToSave = new CacheMetadata({ key: cacheKey, lastUpdated: new Date() });
+          } else {
+            cacheToSave.lastUpdated = new Date();
+          }
+          await cacheToSave.save();
+          console.log('Popular cache timestamp updated in DB.');
+        })
+        .catch(err => console.error('Popular sync trigger failed:', err.message));
     }
   } catch (err) {
     console.error('Checking popular cache status failed:', err.message);

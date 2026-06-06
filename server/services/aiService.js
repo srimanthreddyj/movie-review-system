@@ -40,8 +40,8 @@ Your explanation MUST be formatted in Markdown and include the following section
 Keep the tone intellectual, entertaining, and completely free of placeholders. Provide only the Markdown output.
 `;
 
-  // Define API URLs (Try gemini-2.5-flash first, fall back to gemini-1.5-flash if needed)
-  const models = ['gemini-2.5-flash', 'gemini-1.5-flash'];
+  // Define API URLs (Try gemini-flash-latest first, fall back to gemini-2.5-flash / gemini-2.0-flash if needed)
+  const models = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash'];
   let lastError = null;
 
   for (const model of models) {

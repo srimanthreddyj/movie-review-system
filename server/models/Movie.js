@@ -80,7 +80,7 @@ const MovieSchema = new mongoose.Schema({
   },
   dataSource: {
     type: String,
-    enum: ['tmdb', 'omdb', 'wikidata', 'manual'],
+    enum: ['tmdb', 'omdb', 'wikidata', 'manual', 'gemini'],
     default: 'manual'
   },
   isPopular: {
