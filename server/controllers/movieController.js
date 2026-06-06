@@ -7,11 +7,11 @@ const aiService = require('../services/aiService');
 
 // Helper to check if a cast member exists, or create them
 const resolveCastMember = async (actor, dataSource) => {
-  let queryCondition = { name: actor.name };
-  if (actor.tmdbId) queryCondition.tmdbId = actor.tmdbId;
-  else if (actor.imdbId) queryCondition.imdbId = actor.imdbId;
+  const queryConditions = [{ name: actor.name }];
+  if (actor.tmdbId) queryConditions.push({ tmdbId: actor.tmdbId });
+  if (actor.imdbId) queryConditions.push({ imdbId: actor.imdbId });
 
-  let castMember = await Cast.findOne(queryCondition);
+  let castMember = await Cast.findOne({ $or: queryConditions });
   
   if (!castMember) {
     // If the imported cast member lacks a photo or contains a placeholder, enrich from TMDB
@@ -49,8 +49,16 @@ const resolveCastMember = async (actor, dataSource) => {
     });
     await castMember.save();
   } else {
-    // If the cast member exists but has no gender/photo yet (e.g. from OMDb), update it if TMDB provides it
+    // If the cast member exists but lacks identifiers or gender/photo, update it
     let updated = false;
+    if (actor.tmdbId && !castMember.tmdbId) {
+      castMember.tmdbId = actor.tmdbId;
+      updated = true;
+    }
+    if (actor.imdbId && !castMember.imdbId) {
+      castMember.imdbId = actor.imdbId;
+      updated = true;
+    }
     if (actor.gender && actor.gender !== 'Unspecified' && castMember.gender === 'Unspecified') {
       castMember.gender = actor.gender;
       updated = true;
