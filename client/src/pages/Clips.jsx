@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import api from '../services/api';
+import React, { useEffect, useState, useRef } from 'react';
+import api, { getProxiedImageUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import ClipCard from '../components/ClipCard';
 import { Video, Plus, Search, RotateCcw, X, AlertCircle } from 'lucide-react';
@@ -36,15 +36,79 @@ const Clips = () => {
   const [castSearchResults, setCastSearchResults] = useState([]);
   const [searchingCast, setSearchingCast] = useState(false);
 
+  // Selected Movie & Search States
+  const [selectedMovie, setSelectedMovie] = useState(null);
+  const [movieSearchQuery, setMovieSearchQuery] = useState('');
+  const [movieSearchResults, setMovieSearchResults] = useState([]);
+  const [searchingMovie, setSearchingMovie] = useState(false);
+
+  // Autocomplete UI dropdown visibility & click-outside tracking
+  const [showMovieDropdown, setShowMovieDropdown] = useState(false);
+  const [showCastDropdown, setShowCastDropdown] = useState(false);
+  const movieSearchRef = useRef(null);
+  const castSearchRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (e) => {
+      if (movieSearchRef.current && !movieSearchRef.current.contains(e.target)) {
+        setShowMovieDropdown(false);
+      }
+      if (castSearchRef.current && !castSearchRef.current.contains(e.target)) {
+        setShowCastDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const handleMovieSearchChange = async (e) => {
+    const query = e.target.value;
+    setMovieSearchQuery(query);
+    if (!query.trim()) {
+      setMovieSearchResults([]);
+      setShowMovieDropdown(false);
+      return;
+    }
+    
+    setSearchingMovie(true);
+    setShowMovieDropdown(true);
+    try {
+      const res = await api.get('/movies/search', {
+        params: { q: query }
+      });
+      setMovieSearchResults(res.data || []);
+    } catch (err) {
+      console.error('Failed to search external movies:', err);
+    } finally {
+      setSearchingMovie(false);
+    }
+  };
+
+  const handleSelectMovie = (movie) => {
+    setSelectedMovie(movie);
+    setFormData(prev => ({ ...prev, movieId: movie.source === 'local' ? movie.refId : '' }));
+    setMovieSearchQuery('');
+    setMovieSearchResults([]);
+    setShowMovieDropdown(false);
+  };
+
+  const handleClearSelectedMovie = () => {
+    setSelectedMovie(null);
+    setFormData(prev => ({ ...prev, movieId: '' }));
+    setShowMovieDropdown(false);
+  };
+
   const handleCastSearchChange = async (e) => {
     const query = e.target.value;
     setCastSearchQuery(query);
     if (!query.trim()) {
       setCastSearchResults([]);
+      setShowCastDropdown(false);
       return;
     }
     
     setSearchingCast(true);
+    setShowCastDropdown(true);
     try {
       const res = await api.get('/cast/search-external', {
         params: { q: query }
@@ -67,6 +131,7 @@ const Clips = () => {
     }
     setCastSearchQuery('');
     setCastSearchResults([]);
+    setShowCastDropdown(false);
   };
 
   const handleRemoveSelectedCast = (cast) => {
@@ -139,7 +204,7 @@ const Clips = () => {
 
   const handleAddClip = async (e) => {
     e.preventDefault();
-    if (!formData.title || !formData.url || !formData.movieId) {
+    if (!formData.title || !formData.url) {
       setFormError('Please fill in all required fields.');
       return;
     }
@@ -148,6 +213,31 @@ const Clips = () => {
     setFormLoading(true);
 
     try {
+      let finalMovieId = formData.movieId || null;
+      
+      // Resolve external movie to local ID (auto-import) if selected
+      if (selectedMovie) {
+        if (selectedMovie.source !== 'local') {
+          try {
+            const importRes = await api.get('/movies/external-details', {
+              params: {
+                refId: selectedMovie.refId,
+                source: selectedMovie.source,
+                mediaType: selectedMovie.mediaType || 'movie',
+                title: selectedMovie.title,
+                onlyActresses: 'false'
+              }
+            });
+            finalMovieId = importRes.data._id;
+          } catch (importErr) {
+            console.error(`Failed to import movie ${selectedMovie.title} on clip save:`, importErr);
+            throw new Error(`Failed to import movie "${selectedMovie.title}".`);
+          }
+        } else {
+          finalMovieId = selectedMovie.refId || selectedMovie._id;
+        }
+      }
+
       // Resolve all selected external cast members to local IDs (duplicate-safe)
       const resolvedCastIds = await Promise.all(selectedCast.map(async (cast) => {
         if (cast.source === 'local' || !cast.source) {
@@ -168,6 +258,7 @@ const Clips = () => {
 
       const finalFormData = {
         ...formData,
+        movieId: finalMovieId,
         castInvolved: resolvedCastIds
       };
 
@@ -183,6 +274,9 @@ const Clips = () => {
         movieId: '',
         castInvolved: []
       });
+      setSelectedMovie(null);
+      setMovieSearchQuery('');
+      setMovieSearchResults([]);
       setSelectedCast([]);
       setCastSearchQuery('');
       setCastSearchResults([]);
@@ -209,7 +303,14 @@ const Clips = () => {
           <p style={{ margin: 0 }}>Watch trailers, BTS interviews, and scenes mapped to your catalogue.</p>
         </div>
         <div className="flex-center" style={{ gap: '0.5rem' }}>
-          <button onClick={() => setShowAddModal(true)} className="btn btn-primary flex-center" style={{ gap: '0.375rem' }}>
+          <button onClick={() => {
+            setSelectedMovie(null);
+            setSelectedCast([]);
+            setMovieSearchQuery('');
+            setCastSearchQuery('');
+            setFormError('');
+            setShowAddModal(true);
+          }} className="btn btn-primary flex-center" style={{ gap: '0.375rem' }}>
             <Plus size={16} />
             <span>Add Video Clip</span>
           </button>
@@ -325,20 +426,101 @@ const Clips = () => {
                 />
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Link to Movie/TV Series *</label>
-                <select 
-                  name="movieId"
-                  value={formData.movieId}
-                  onChange={handleInputChange}
-                  className="form-input"
-                  required
-                >
-                  <option value="">-- Select Title --</option>
-                  {moviesList.map((m) => (
-                    <option key={m._id} value={m._id}>{m.title} ({m.mediaType})</option>
-                  ))}
-                </select>
+              {/* Movie/TV Series Search autocomplete */}
+              <div className="form-group" style={{ position: 'relative' }} ref={movieSearchRef}>
+                <label className="form-label">Link to Movie/TV Series</label>
+                
+                {selectedMovie ? (
+                  /* Selected Movie Preview */
+                  <div className="selected-movie-preview flex-between" style={{
+                    padding: '0.625rem 0.875rem',
+                    border: '1px solid var(--border-color)',
+                    borderRadius: 'var(--border-radius)',
+                    backgroundColor: 'var(--bg-secondary)',
+                    marginBottom: '0.5rem'
+                  }}>
+                    <div className="flex-center" style={{ gap: '0.75rem', justifyContent: 'flex-start' }}>
+                      {selectedMovie.posterUrl ? (
+                        <img 
+                          src={getProxiedImageUrl(selectedMovie.posterUrl)} 
+                          alt={selectedMovie.title} 
+                          style={{ width: '30px', height: '45px', objectFit: 'cover', borderRadius: '4px' }} 
+                        />
+                      ) : (
+                        <div style={{ width: '30px', height: '45px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '4px' }} className="flex-center">🎬</div>
+                      )}
+                      <div style={{ textAlign: 'left' }}>
+                        <div style={{ fontWeight: '600', fontSize: '0.875rem', color: 'var(--text-primary)' }}>{selectedMovie.title}</div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--text-secondary)' }}>
+                          {selectedMovie.releaseDate ? new Date(selectedMovie.releaseDate).getFullYear() : 'N/A'} | {selectedMovie.mediaType === 'series' ? 'TV Show' : 'Movie'} | {selectedMovie.source === 'local' ? 'In Catalog' : 'TMDB'}
+                        </div>
+                      </div>
+                    </div>
+                    <button type="button" onClick={handleClearSelectedMovie} className="modal-close-btn flex-center" style={{ width: '28px', height: '28px' }}>
+                      <X size={16} />
+                    </button>
+                  </div>
+                ) : (
+                  /* Search input */
+                  <>
+                    <input 
+                      type="text" 
+                      placeholder="Search movies/TV series to link..." 
+                      value={movieSearchQuery}
+                      onChange={handleMovieSearchChange}
+                      onFocus={() => setShowMovieDropdown(true)}
+                      className="form-input"
+                      style={{ minHeight: '38px', fontSize: '0.813rem' }}
+                    />
+                    
+                    {searchingMovie && (
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.25rem' }}>Searching movies...</div>
+                    )}
+                    
+                    {showMovieDropdown && movieSearchResults.length > 0 && (
+                      <div className="movie-search-results-list" style={{
+                        border: '1px solid var(--border-color)',
+                        borderTop: 'none',
+                        borderRadius: `0 0 var(--border-radius) var(--border-radius)`,
+                        maxHeight: '180px',
+                        overflowY: 'auto',
+                        backgroundColor: 'var(--bg-primary)',
+                        position: 'absolute',
+                        width: '100%',
+                        zIndex: 15,
+                        boxShadow: 'var(--shadow-sm)'
+                      }}>
+                        {movieSearchResults.map((m) => (
+                          <div 
+                            key={m.refId} 
+                            className="movie-search-result-row flex-between"
+                            onClick={() => handleSelectMovie(m)}
+                            style={{
+                              padding: '0.5rem 0.75rem',
+                              borderBottom: '1px solid var(--border-color)',
+                              cursor: 'pointer',
+                              fontSize: '0.813rem',
+                              transition: 'background-color 0.15s',
+                              textAlign: 'left'
+                            }}
+                          >
+                            <div className="flex-center" style={{ gap: '0.5rem', justifyContent: 'flex-start' }}>
+                              {m.posterUrl ? (
+                                <img src={getProxiedImageUrl(m.posterUrl)} alt={m.title} style={{ width: '20px', height: '30px', objectFit: 'cover', borderRadius: '2px' }} />
+                              ) : (
+                                <div style={{ width: '20px', height: '30px', backgroundColor: 'var(--bg-tertiary)' }} />
+                              )}
+                              <span>{m.title} ({m.releaseDate ? new Date(m.releaseDate).getFullYear() : 'N/A'}) - {m.mediaType === 'series' ? 'TV Show' : 'Movie'}</span>
+                            </div>
+                            <span style={{ fontSize: '0.7rem', color: m.source === 'local' ? '#10b981' : '#3b82f6', fontWeight: '600' }}>
+                              {m.source === 'local' ? 'Catalog' : 'TMDB'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
               </div>
 
               <div className="form-group">
@@ -371,14 +553,21 @@ const Clips = () => {
               </div>
 
               {/* Cast selection search input and result list */}
-              <div className="form-group" style={{ position: 'relative' }}>
+              <div className="form-group" style={{ position: 'relative' }} ref={castSearchRef}>
                 <label className="form-label">Involved Cast Members</label>
                 
                 {/* Selected Cast Pills */}
                 {selectedCast.length > 0 && (
                   <div className="selected-cast-list flex-center" style={{ justifyContent: 'flex-start', flexWrap: 'wrap', gap: '0.375rem', marginBottom: '0.75rem' }}>
                     {selectedCast.map(cast => (
-                      <span key={cast.refId || cast._id} className="cast-pill flex-center">
+                      <span key={cast.refId || cast._id} className="cast-pill flex-center" style={{ gap: '0.375rem', paddingLeft: cast.photoUrl ? '0.25rem' : '0.75rem' }}>
+                        {cast.photoUrl && (
+                          <img 
+                            src={getProxiedImageUrl(cast.photoUrl)} 
+                            alt={cast.name} 
+                            style={{ width: '18px', height: '18px', borderRadius: '50%', objectFit: 'cover' }} 
+                          />
+                        )}
                         <span>{cast.name}</span>
                         <button type="button" onClick={() => handleRemoveSelectedCast(cast)} className="remove-cast-pill-btn">
                           <X size={12} />
@@ -394,6 +583,7 @@ const Clips = () => {
                   placeholder="Search cast members to add..." 
                   value={castSearchQuery}
                   onChange={handleCastSearchChange}
+                  onFocus={() => setShowCastDropdown(true)}
                   className="form-input"
                   style={{ minHeight: '38px', fontSize: '0.813rem' }}
                 />
@@ -404,7 +594,7 @@ const Clips = () => {
                 )}
 
                 {/* Search Results Dropdown List */}
-                {castSearchResults.length > 0 && (
+                {showCastDropdown && castSearchResults.length > 0 && (
                   <div className="cast-search-results-list">
                     {castSearchResults.map((cast) => {
                       const isAdded = selectedCast.some(c => 
@@ -419,7 +609,18 @@ const Clips = () => {
                           onClick={() => !isAdded && handleAddSelectedCast(cast)}
                           style={{ opacity: isAdded ? 0.5 : 1, cursor: isAdded ? 'default' : 'pointer' }}
                         >
-                          <span>{cast.name} ({cast.knownForDepartment || (cast.gender === 'Female' ? 'Actress' : 'Actor')}){cast.source === 'tmdb' ? ' - TMDB' : ' - Catalog'}</span>
+                          <div className="flex-center" style={{ gap: '0.5rem', justifyContent: 'flex-start' }}>
+                            {cast.photoUrl ? (
+                              <img 
+                                src={getProxiedImageUrl(cast.photoUrl)} 
+                                alt={cast.name} 
+                                style={{ width: '20px', height: '30px', objectFit: 'cover', borderRadius: '2px' }} 
+                              />
+                            ) : (
+                              <div style={{ width: '20px', height: '30px', backgroundColor: 'var(--bg-tertiary)', borderRadius: '2px', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem' }}>👤</div>
+                            )}
+                            <span>{cast.name} ({cast.knownForDepartment || (cast.gender === 'Female' ? 'Actress' : 'Actor')}){cast.source === 'tmdb' ? ' - TMDB' : ' - Catalog'}</span>
+                          </div>
                           {!isAdded && (
                             <span style={{ fontSize: '0.75rem', color: 'var(--accent-color)', fontWeight: '600' }}>Add</span>
                           )}
@@ -613,6 +814,9 @@ const Clips = () => {
           border-bottom: none;
         }
         .cast-search-result-row:hover {
+          background-color: var(--bg-tertiary);
+        }
+        .movie-search-result-row:hover {
           background-color: var(--bg-tertiary);
         }
       `}</style>

@@ -48,14 +48,16 @@ exports.addClip = async (req, res) => {
   try {
     const { movieId, title, url, description, clipType, castInvolved } = req.body;
 
-    if (!movieId || !title || !url) {
-      return res.status(400).json({ message: 'Movie ID, title, and URL are required' });
+    if (!title || !url) {
+      return res.status(400).json({ message: 'Title and URL are required' });
     }
 
-    // Verify movie exists
-    const movieExists = await Movie.exists({ _id: movieId });
-    if (!movieExists) {
-      return res.status(404).json({ message: 'Movie not found' });
+    // Verify movie exists if provided
+    if (movieId) {
+      const movieExists = await Movie.exists({ _id: movieId });
+      if (!movieExists) {
+        return res.status(404).json({ message: 'Movie not found' });
+      }
     }
 
     // Validate castInvolved if provided
@@ -67,7 +69,7 @@ exports.addClip = async (req, res) => {
     }
 
     const clip = new Clip({
-      movieId,
+      movieId: movieId || null,
       title,
       url,
       description,
@@ -113,6 +115,8 @@ exports.updateClip = async (req, res) => {
         return res.status(404).json({ message: 'Movie not found' });
       }
       clip.movieId = movieId;
+    } else if (movieId === null || movieId === '') {
+      clip.movieId = null;
     }
 
     // Validate castInvolved if provided
