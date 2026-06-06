@@ -6,7 +6,24 @@ const connectDB = require('./config/db');
 const app = express();
 
 // Connect Database
-connectDB();
+connectDB().then(() => {
+  // Trigger cache check after MongoDB is connected
+  const movieController = require('./controllers/movieController');
+  if (typeof movieController.refreshPopularCacheIfExpired === 'function') {
+    console.log('MongoDB connected. Initiating popular cache status check...');
+    movieController.refreshPopularCacheIfExpired();
+  }
+
+  // Check cache expiration every 24 hours to automatically sync weekly if server runs continuously
+  setInterval(() => {
+    if (typeof movieController.refreshPopularCacheIfExpired === 'function') {
+      console.log('Running daily popular cache check...');
+      movieController.refreshPopularCacheIfExpired();
+    }
+  }, 24 * 60 * 60 * 1000);
+}).catch(err => {
+  console.error('Failed to run initial popular cache check:', err.message);
+});
 
 // Init Middleware
 app.use(cors());

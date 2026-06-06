@@ -930,8 +930,81 @@ const getPopularCastFromGemini = async () => {
 
 // Fetch top 20 popular movies from TMDB
 exports.getPopularMovies = async () => {
+  const apiKey = process.env.TMDB_API_KEY;
+  const geminiApiKey = process.env.GEMINI_API_KEY;
+
+  if (geminiApiKey) {
+    try {
+      console.log('API Service: Asking Gemini for trending movies & TMDB IDs...');
+      const prompt = `
+        Provide a list of 20 highly popular and trending movies (especially recent releases).
+        For each movie, you must provide its valid, official numeric TMDB (The Movie Database) ID.
+        Return the response ONLY as a valid JSON array of objects. Do not wrap in markdown or backticks.
+        Format:
+        [
+          {
+            "title": "Movie Title",
+            "tmdbId": "numeric_tmdb_id_as_string",
+            "releaseDate": "YYYY-MM-DD",
+            "synopsis": "A brief plot summary",
+            "genre": ["Action", "Drama"],
+            "rating": 7.8
+          }
+        ]
+      `;
+      const text = await queryGemini(prompt);
+      const cleanJson = text.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
+      const geminiMovies = JSON.parse(cleanJson);
+
+      console.log(`API Service: Gemini returned ${geminiMovies.length} trending movies. Fetching details from TMDB...`);
+
+      const moviesList = await Promise.all(geminiMovies.map(async (item) => {
+        if (!item.tmdbId) return null;
+        try {
+          // Fetch basic movie details from TMDB using the TMDB ID
+          const url = `https://api.themoviedb.org/3/movie/${item.tmdbId}?api_key=${apiKey}&language=en-US`;
+          const res = await fetchWithTimeout(url);
+          if (!res.ok) throw new Error(`TMDB details lookup failed: ${res.statusText}`);
+          const tmdbData = await res.json();
+
+          return {
+            title: tmdbData.title || item.title,
+            originalTitle: tmdbData.original_title || '',
+            releaseDate: tmdbData.release_date ? new Date(tmdbData.release_date) : (item.releaseDate ? new Date(item.releaseDate) : null),
+            posterUrl: getTmdbImageUrl(tmdbData.poster_path),
+            refId: item.tmdbId,
+            source: 'tmdb',
+            mediaType: 'movie',
+            synopsis: tmdbData.overview || item.synopsis || '',
+            genre: tmdbData.genres ? tmdbData.genres.map(g => g.name) : (item.genre || [])
+          };
+        } catch (err) {
+          console.warn(`API Service: TMDB fetch failed for ID ${item.tmdbId}, using Gemini metadata fallback. Error:`, err.message);
+          return {
+            title: item.title,
+            originalTitle: '',
+            releaseDate: item.releaseDate ? new Date(item.releaseDate) : null,
+            posterUrl: '',
+            refId: item.tmdbId,
+            source: 'gemini',
+            mediaType: 'movie',
+            synopsis: item.synopsis || '',
+            genre: item.genre || []
+          };
+        }
+      }));
+
+      const filteredMoviesList = moviesList.filter(Boolean);
+      if (filteredMoviesList.length > 0) {
+        return filteredMoviesList;
+      }
+    } catch (err) {
+      console.error('API Service: Asking Gemini for popular movies failed. Falling back to native TMDB popular list... Error:', err.message);
+    }
+  }
+
+  // Fallback to TMDB native popular movies endpoint
   try {
-    const apiKey = process.env.TMDB_API_KEY;
     if (!apiKey) throw new Error('TMDB API Key missing');
 
     const url = `https://api.themoviedb.org/3/movie/popular?api_key=${apiKey}&language=en-US&page=1`;

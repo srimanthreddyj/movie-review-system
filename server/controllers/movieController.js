@@ -791,3 +791,5 @@ exports.getPopularMovies = async (req, res) => {
     res.status(500).json({ message: 'Fetching popular movies failed', error: error.message });
   }
 };
+
+exports.refreshPopularCacheIfExpired = refreshPopularCacheIfExpired;
