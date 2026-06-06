@@ -51,6 +51,50 @@ const getTmdbImageUrl = (path, size = 'w500') => {
   return path ? `https://image.tmdb.org/t/p/${size}${path}` : '';
 };
 
+// Helper: Fetch poster from OMDb using title and optional year/releaseDate
+const fetchPosterFromOMDB = async (title, yearOrDate) => {
+  const apiKey = process.env.OMDB_API_KEY;
+  if (!apiKey || !title) return '';
+
+  const queryOMDB = async (url) => {
+    try {
+      const res = await fetchWithTimeout(url);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.Response !== 'False' && data.Poster && data.Poster !== 'N/A') {
+          return data.Poster;
+        }
+      }
+    } catch (err) {
+      console.warn(`OMDb fetch error:`, err.message);
+    }
+    return '';
+  };
+
+  try {
+    let yearStr = '';
+    if (yearOrDate) {
+      if (yearOrDate instanceof Date) {
+        yearStr = yearOrDate.getFullYear().toString();
+      } else if (typeof yearOrDate === 'string') {
+        yearStr = yearOrDate.split('-')[0];
+      }
+    }
+
+    if (yearStr && /^\d{4}$/.test(yearStr)) {
+      const urlWithYear = `https://www.omdbapi.com/?apikey=${apiKey}&t=${encodeURIComponent(title)}&y=${yearStr}`;
+      const poster = await queryOMDB(urlWithYear);
+      if (poster) return poster;
+    }
+
+    const urlWithoutYear = `https://www.omdbapi.com/?apikey=${apiKey}&t=${encodeURIComponent(title)}`;
+    return await queryOMDB(urlWithoutYear);
+  } catch (err) {
+    console.warn(`OMDb poster fetch failed for ${title}:`, err.message);
+  }
+  return '';
+};
+
 // Helper to map TMDB gender codes to strings
 const mapGender = (g) => {
   if (g === 1) return 'Female';
@@ -399,7 +443,13 @@ const searchGemini = async (query) => {
   try {
     const text = await queryGemini(prompt);
     const cleanJson = text.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
-    return JSON.parse(cleanJson);
+    const results = JSON.parse(cleanJson);
+    return await Promise.all(results.map(async (item) => {
+      if (!item.posterUrl) {
+        item.posterUrl = await fetchPosterFromOMDB(item.title, item.releaseDate);
+      }
+      return item;
+    }));
   } catch (e) {
     console.error('Failed to parse Gemini JSON search response:', e);
     return [];
@@ -447,6 +497,12 @@ const getGeminiDetails = async (refId, titleQuery, mediaType = 'movie') => {
     // Sort and Cap cast dynamically
     movieDetails.cast = filterAndCapCast(movieDetails.cast);
     movieDetails.mediaType = mediaType;
+
+    // Fetch poster from OMDb if missing
+    if (!movieDetails.posterUrl) {
+      movieDetails.posterUrl = await fetchPosterFromOMDB(movieDetails.title || titleQuery, movieDetails.releaseDate);
+    }
+
     return movieDetails;
   } catch (e) {
     throw new Error(`Failed to parse Gemini details JSON: ${e.message}`);
@@ -831,13 +887,16 @@ exports.getTmdbPersonMovieCredits = async (tmdbId, name) => {
       const text = await queryGemini(prompt);
       const cleanJson = text.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
       const results = JSON.parse(cleanJson);
-      return results.map(movie => ({
-        tmdbId: movie.tmdbId || Math.floor(Math.random() * 899999 + 100000).toString(),
-        title: movie.title,
-        releaseDate: movie.releaseDate ? new Date(movie.releaseDate) : null,
-        posterUrl: '',
-        characterName: movie.characterName || '',
-        role: movie.role || 'Actor'
+      return await Promise.all(results.map(async (movie) => {
+        const poster = await fetchPosterFromOMDB(movie.title, movie.releaseDate);
+        return {
+          tmdbId: movie.tmdbId || Math.floor(Math.random() * 899999 + 100000).toString(),
+          title: movie.title,
+          releaseDate: movie.releaseDate ? new Date(movie.releaseDate) : null,
+          posterUrl: poster,
+          characterName: movie.characterName || '',
+          role: movie.role || 'Actor'
+        };
       }));
     } catch (err) {
       console.error(`Gemini Person Credits Lookup failed for "${name}":`, err.message);
@@ -936,7 +995,13 @@ exports.searchExternalMulti = async (query) => {
       const data = await response.json();
       const text = data.candidates[0].content.parts[0].text.trim();
       const cleanJson = text.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
-      return JSON.parse(cleanJson);
+      const results = JSON.parse(cleanJson);
+      return await Promise.all(results.map(async (item) => {
+        if (item.mediaType !== 'person' && !item.posterUrl) {
+          item.posterUrl = await fetchPosterFromOMDB(item.title, item.releaseDate);
+        }
+        return item;
+      }));
     }
   } catch (err) {
     console.error('Gemini Multi Search fallback failed:', err.message);
@@ -974,16 +1039,19 @@ const getPopularMoviesFromGemini = async () => {
     const text = await queryGemini(prompt);
     const cleanJson = text.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
     const results = JSON.parse(cleanJson);
-    return results.map((movie, idx) => ({
-      title: movie.title,
-      originalTitle: movie.originalTitle || '',
-      releaseDate: movie.releaseDate ? new Date(movie.releaseDate) : null,
-      posterUrl: movie.posterUrl || '',
-      refId: movie.refId || `gemini-popular-${idx}`,
-      source: 'gemini',
-      mediaType: 'movie',
-      synopsis: movie.synopsis || '',
-      genre: movie.genre || []
+    return await Promise.all(results.map(async (movie, idx) => {
+      const poster = await fetchPosterFromOMDB(movie.title, movie.releaseDate);
+      return {
+        title: movie.title,
+        originalTitle: movie.originalTitle || '',
+        releaseDate: movie.releaseDate ? new Date(movie.releaseDate) : null,
+        posterUrl: poster || movie.posterUrl || '',
+        refId: movie.refId || `gemini-popular-${idx}`,
+        source: 'gemini',
+        mediaType: 'movie',
+        synopsis: movie.synopsis || '',
+        genre: movie.genre || []
+      };
     }));
   } catch (err) {
     console.error('Gemini popular movies fallback failed:', err.message);
@@ -1085,11 +1153,12 @@ exports.getPopularMovies = async () => {
           };
         } catch (err) {
           console.warn(`API Service: TMDB fetch failed for ID ${item.tmdbId}, using Gemini metadata fallback. Error:`, err.message);
+          const poster = await fetchPosterFromOMDB(item.title, item.releaseDate);
           return {
             title: item.title,
             originalTitle: '',
             releaseDate: item.releaseDate ? new Date(item.releaseDate) : null,
-            posterUrl: '',
+            posterUrl: poster,
             refId: item.tmdbId,
             source: 'gemini',
             mediaType: 'movie',

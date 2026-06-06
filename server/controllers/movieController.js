@@ -789,9 +789,14 @@ const runPopularSync = async () => {
     await Cast.updateMany({ isPopular: true }, { $set: { isPopular: false } });
 
     for (const item of popularCast) {
-      let castMember = await Cast.findOne({ tmdbId: item.tmdbId });
+      const queryConditions = [];
+      if (item.tmdbId) queryConditions.push({ tmdbId: item.tmdbId });
+      queryConditions.push({ name: item.name });
+
+      let castMember = await Cast.findOne({ $or: queryConditions });
       if (castMember) {
         castMember.isPopular = true;
+        if (item.tmdbId && !castMember.tmdbId) castMember.tmdbId = item.tmdbId;
         castMember.photoUrl = item.photoUrl || castMember.photoUrl;
         await castMember.save();
       } else {
