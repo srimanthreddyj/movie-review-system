@@ -92,12 +92,18 @@ const Movies = () => {
   };
 
   const handleMovieClick = async (movie) => {
-    if (movie.source === 'local') {
-      navigate(`/movies/${movie.refId}`);
+    const isLocal = !movie.source || movie.source === 'local';
+    if (isLocal) {
+      const localId = movie._id || movie.refId;
+      if (localId && localId !== 'undefined') {
+        navigate(`/movies/${localId}`);
+      }
       return;
     }
-    // Route to preview page
-    navigate(`/movies/tmdb-${movie.refId}?source=${movie.source || 'tmdb'}&mediaType=${movie.mediaType || 'movie'}`);
+    const targetId = movie.refId || movie.tmdbId;
+    if (targetId && targetId !== 'undefined') {
+      navigate(`/movies/tmdb-${targetId}?source=${movie.source || 'tmdb'}&mediaType=${movie.mediaType || 'movie'}`);
+    }
   };
 
   // Perform local cascading filters on movies array

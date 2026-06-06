@@ -71,12 +71,18 @@ const Cast = () => {
   };
 
   const handleCastClick = async (member) => {
-    if (member.source === 'local') {
-      navigate(`/cast/${member.refId}`);
+    const isLocal = !member.source || member.source === 'local';
+    if (isLocal) {
+      const localId = member._id || member.refId;
+      if (localId && localId !== 'undefined') {
+        navigate(`/cast/${localId}`);
+      }
       return;
     }
-    // Route to preview page
-    navigate(`/cast/tmdb-${member.refId}?source=${member.source || 'tmdb'}`);
+    const targetId = member.refId || member.tmdbId;
+    if (targetId && targetId !== 'undefined') {
+      navigate(`/cast/tmdb-${targetId}?source=${member.source || 'tmdb'}`);
+    }
   };
 
   // Perform cascading filters locally

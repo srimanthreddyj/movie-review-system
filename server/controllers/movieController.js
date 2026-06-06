@@ -753,6 +753,7 @@ exports.getPopularMovies = async (req, res) => {
     const popular = await Movie.find({ isPopular: true }).sort({ rating: -1, releaseDate: -1 }).limit(20);
 
     const formatted = popular.map(movie => ({
+      _id: movie._id.toString(),
       title: movie.title,
       originalTitle: movie.originalTitle || '',
       releaseDate: movie.releaseDate,

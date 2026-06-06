@@ -6,7 +6,7 @@ import FavouriteButton from '../components/FavouriteButton';
 import MovieCard from '../components/MovieCard';
 import CommentSection from '../components/CommentSection';
 import AddToCollectionModal from '../components/AddToCollectionModal';
-import { ArrowLeft, User, Calendar, Globe, AlertTriangle, Video, FolderPlus, Sparkles, MessageSquare } from 'lucide-react';
+import { ArrowLeft, User, Calendar, Globe, AlertTriangle, Video, FolderPlus, Sparkles, MessageSquare, Heart } from 'lucide-react';
 
 const CastDetail = () => {
   const { id } = useParams();
@@ -228,7 +228,7 @@ const CastDetail = () => {
                 className="btn fav-btn flex-center"
                 style={{ width: '100%' }}
               >
-                <Globe size={16} style={{ marginRight: '0.5rem' }} />
+                <Heart size={16} style={{ marginRight: '0.5rem' }} />
                 <span>Add to Favourites</span>
               </button>
             ) : (

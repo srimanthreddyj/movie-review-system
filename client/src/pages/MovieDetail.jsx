@@ -7,7 +7,7 @@ import AddToCollectionModal from '../components/AddToCollectionModal';
 import CastCard from '../components/CastCard';
 import ClipCard from '../components/ClipCard';
 import CommentSection from '../components/CommentSection';
-import { Film, Calendar, Globe, Star, Sparkles, Clock, AlertTriangle, ArrowLeft, Tag, FolderPlus } from 'lucide-react';
+import { Film, Calendar, Globe, Star, Sparkles, Clock, AlertTriangle, ArrowLeft, Tag, FolderPlus, Heart, MessageSquare } from 'lucide-react';
 
 const MovieDetail = () => {
   const { id } = useParams();
@@ -92,6 +92,7 @@ const MovieDetail = () => {
           role: actor.role,
           castId: {
             _id: actor.tmdbId || `preview-cast-${idx}`,
+            tmdbId: actor.tmdbId,
             name: actor.name,
             photoUrl: actor.photoUrl,
             knownFor: actor.knownFor,
@@ -491,7 +492,12 @@ const MovieDetail = () => {
                       key={c._id} 
                       cast={c.castId} 
                       characterName={c.characterName} 
-                      onClick={(actor) => navigate(`/cast/tmdb-${actor.tmdbId || actor._id}?source=tmdb`)}
+                      onClick={(actor) => {
+                        const targetId = actor.tmdbId || actor._id || actor.refId;
+                        if (targetId && targetId !== 'undefined') {
+                          navigate(`/cast/tmdb-${targetId}?source=tmdb`);
+                        }
+                      }}
                     />
                   )
                 ))}

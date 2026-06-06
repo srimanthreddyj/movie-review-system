@@ -325,7 +325,18 @@ exports.previewExternalCast = async (req, res) => {
 exports.getPopularCast = async (req, res) => {
   try {
     const popular = await Cast.find({ isPopular: true }).sort({ name: 1 }).limit(20);
-    res.json(popular);
+    const formatted = popular.map(c => ({
+      _id: c._id.toString(),
+      name: c.name,
+      tmdbId: c.tmdbId,
+      photoUrl: c.photoUrl,
+      gender: c.gender,
+      knownForDepartment: c.knownFor || 'Acting',
+      knownFor: '',
+      source: 'local',
+      refId: c._id.toString()
+    }));
+    res.json(formatted);
   } catch (error) {
     res.status(500).json({ message: 'Fetching popular cast members failed', error: error.message });
   }

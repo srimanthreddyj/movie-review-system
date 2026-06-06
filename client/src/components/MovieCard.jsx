@@ -4,7 +4,7 @@ import { Film, Tv, Calendar } from 'lucide-react';
 import { getProxiedImageUrl } from '../services/api';
 
 const MovieCard = ({ movie, userTags = [], userFavourites = [], onClick }) => {
-  const { _id, source, title, mediaType, releaseDate, posterUrl, genre = [] } = movie;
+  const { _id, refId, source, title, mediaType, releaseDate, posterUrl, genre = [] } = movie;
   
   const isExternal = source && source !== 'local';
   
@@ -20,6 +20,12 @@ const MovieCard = ({ movie, userTags = [], userFavourites = [], onClick }) => {
   const assignedTags = (_id && userTags) ? userTags.filter(
     (tag) => tag.entityId && tag.entityId.toString() === _id.toString()
   ) : [];
+
+  const targetId = refId || movie.tmdbId || _id;
+  const isValidId = targetId && targetId !== 'undefined';
+  const linkTo = isExternal 
+    ? (isValidId ? `/movies/tmdb-${targetId}?source=${source || 'tmdb'}&mediaType=${mediaType || 'movie'}` : '#')
+    : `/movies/${_id || refId}`;
 
   const CardContent = () => (
     <>
@@ -89,15 +95,21 @@ const MovieCard = ({ movie, userTags = [], userFavourites = [], onClick }) => {
   return (
     <div className="card movie-card">
       {isExternal ? (
-        <div 
-          onClick={() => onClick && onClick(movie)} 
-          className="movie-card-link"
-          style={{ cursor: 'pointer', height: '100%', display: 'flex', flexDirection: 'column' }}
-        >
-          <CardContent />
-        </div>
+        onClick ? (
+          <div 
+            onClick={() => onClick && onClick(movie)} 
+            className="movie-card-link"
+            style={{ cursor: 'pointer', height: '100%', display: 'flex', flexDirection: 'column' }}
+          >
+            <CardContent />
+          </div>
+        ) : (
+          <Link to={linkTo} className="movie-card-link" style={!isValidId ? { pointerEvents: 'none' } : {}}>
+            <CardContent />
+          </Link>
+        )
       ) : (
-        <Link to={`/movies/${_id}`} className="movie-card-link">
+        <Link to={linkTo} className="movie-card-link">
           <CardContent />
         </Link>
       )}

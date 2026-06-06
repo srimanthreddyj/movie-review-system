@@ -96,9 +96,14 @@ const Navbar = () => {
     setShowMovieDropdown(false);
 
     if (item.source === 'local') {
-      navigate(`/movies/${item.refId}`);
+      if (item.refId && item.refId !== 'undefined') {
+        navigate(`/movies/${item.refId}`);
+      }
     } else {
-      navigate(`/movies/tmdb-${item.refId}?source=${item.source || 'tmdb'}&mediaType=${item.mediaType || 'movie'}`);
+      const targetId = item.refId || item.tmdbId;
+      if (targetId && targetId !== 'undefined') {
+        navigate(`/movies/tmdb-${targetId}?source=${item.source || 'tmdb'}&mediaType=${item.mediaType || 'movie'}`);
+      }
     }
   };
 
@@ -108,9 +113,14 @@ const Navbar = () => {
     setShowCastDropdown(false);
 
     if (item.source === 'local') {
-      navigate(`/cast/${item.refId}`);
+      if (item.refId && item.refId !== 'undefined') {
+        navigate(`/cast/${item.refId}`);
+      }
     } else {
-      navigate(`/cast/tmdb-${item.refId}?source=${item.source || 'tmdb'}`);
+      const targetId = item.refId || item.tmdbId;
+      if (targetId && targetId !== 'undefined') {
+        navigate(`/cast/tmdb-${targetId}?source=${item.source || 'tmdb'}`);
+      }
     }
   };
 

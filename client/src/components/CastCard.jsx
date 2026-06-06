@@ -4,7 +4,7 @@ import { User, Globe } from 'lucide-react';
 import { getProxiedImageUrl } from '../services/api';
 
 const CastCard = ({ cast, userFavourites = [], characterName, onClick }) => {
-  const { _id, name, photoUrl, knownFor, gender, nationality, source } = cast;
+  const { _id, refId, name, photoUrl, knownFor, gender, nationality, source, tmdbId } = cast;
 
   const isFemale = gender === 'Female';
   const isExternal = source && source !== 'local';
@@ -13,6 +13,12 @@ const CastCard = ({ cast, userFavourites = [], characterName, onClick }) => {
   const favouriteItem = (_id && userFavourites) ? userFavourites.find(
     (fav) => fav.entityId && fav.entityId.toString() === _id.toString()
   ) : null;
+
+  const targetId = refId || tmdbId || _id;
+  const isValidId = targetId && targetId !== 'undefined';
+  const linkTo = isExternal 
+    ? (isValidId ? `/cast/tmdb-${targetId}?source=${source || 'tmdb'}` : '#')
+    : `/cast/${_id || refId}`;
 
   const CardContent = () => (
     <>
@@ -72,15 +78,21 @@ const CastCard = ({ cast, userFavourites = [], characterName, onClick }) => {
   return (
     <div className={`card cast-card ${isFemale ? 'actress-card' : ''}`}>
       {isExternal ? (
-        <div 
-          onClick={() => onClick && onClick(cast)} 
-          className="cast-card-link"
-          style={{ cursor: 'pointer', height: '100%', display: 'flex', flexDirection: 'column' }}
-        >
-          <CardContent />
-        </div>
+        onClick ? (
+          <div 
+            onClick={() => onClick && onClick(cast)} 
+            className="cast-card-link"
+            style={{ cursor: 'pointer', height: '100%', display: 'flex', flexDirection: 'column' }}
+          >
+            <CardContent />
+          </div>
+        ) : (
+          <Link to={linkTo} className="cast-card-link" style={!isValidId ? { pointerEvents: 'none' } : {}}>
+            <CardContent />
+          </Link>
+        )
       ) : (
-        <Link to={`/cast/${_id}`} className="cast-card-link">
+        <Link to={linkTo} className="cast-card-link">
           <CardContent />
         </Link>
       )}
