@@ -840,4 +840,55 @@ exports.searchExternalMulti = async (query) => {
   return [];
 };
 
+// Fetch top 20 popular movies from TMDB
+exports.getPopularMovies = async () => {
+  const apiKey = process.env.TMDB_API_KEY;
+  if (!apiKey) throw new Error('TMDB API Key missing');
+
+  const url = `https://api.themoviedb.org/3/movie/popular?api_key=${apiKey}&language=en-US&page=1`;
+  const res = await fetchWithTimeout(url);
+  if (!res.ok) throw new Error(`TMDB Popular Movies fetch failed: ${res.statusText}`);
+  const data = await res.json();
+
+  const genreMap = {
+    28: 'Action', 12: 'Adventure', 16: 'Animation', 35: 'Comedy', 80: 'Crime',
+    99: 'Documentary', 18: 'Drama', 10751: 'Family', 14: 'Fantasy', 36: 'History',
+    27: 'Horror', 10402: 'Music', 9648: 'Mystery', 10749: 'Romance', 878: 'Sci-Fi',
+    10770: 'TV Movie', 53: 'Thriller', 10752: 'War', 37: 'Western'
+  };
+
+  return (data.results || []).map(movie => ({
+    title: movie.title,
+    originalTitle: movie.original_title || '',
+    releaseDate: movie.release_date ? new Date(movie.release_date) : null,
+    posterUrl: getTmdbImageUrl(movie.poster_path),
+    refId: movie.id.toString(),
+    source: 'tmdb',
+    mediaType: 'movie',
+    synopsis: movie.overview || '',
+    genre: (movie.genre_ids || []).map(id => genreMap[id]).filter(Boolean)
+  }));
+};
+
+// Fetch top 20 popular cast members (persons) from TMDB
+exports.getPopularCast = async () => {
+  const apiKey = process.env.TMDB_API_KEY;
+  if (!apiKey) throw new Error('TMDB API Key missing');
+
+  const url = `https://api.themoviedb.org/3/person/popular?api_key=${apiKey}&language=en-US&page=1`;
+  const res = await fetchWithTimeout(url);
+  if (!res.ok) throw new Error(`TMDB Popular Persons fetch failed: ${res.statusText}`);
+  const data = await res.json();
+
+  return (data.results || []).map(person => ({
+    name: person.name,
+    tmdbId: person.id.toString(),
+    photoUrl: getTmdbImageUrl(person.profile_path),
+    gender: mapGender(person.gender),
+    knownForDepartment: person.known_for_department || 'Acting',
+    knownFor: (person.known_for || []).map(item => item.title || item.name || '').filter(Boolean).join(', '),
+    source: 'tmdb'
+  }));
+};
+
 

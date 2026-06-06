@@ -83,6 +83,11 @@ const MovieSchema = new mongoose.Schema({
     enum: ['tmdb', 'omdb', 'wikidata', 'manual'],
     default: 'manual'
   },
+  isPopular: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
   cast: [MovieCastSchema]
 }, {
   timestamps: true

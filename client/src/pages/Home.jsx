@@ -2,52 +2,49 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
+import MovieCard from '../components/MovieCard';
 import CastCard from '../components/CastCard';
-import { Users, Heart, FolderOpen, ArrowRight, Activity, Smile, Video, Loader2 } from 'lucide-react';
+import { Film, Users, Heart, FolderOpen, ArrowRight, Activity, Smile, Loader2 } from 'lucide-react';
 
 const Home = () => {
   const { user } = useAuth();
   const [stats, setStats] = useState({
+    movies: 0,
     cast: 0,
     favourites: 0,
-    collections: 0,
-    clips: 0
+    collections: 0
   });
-  const [featuredActresses, setFeaturedActresses] = useState([]);
+  const [popularMovies, setPopularMovies] = useState([]);
+  const [popularCast, setPopularCast] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchHomeData = async () => {
       try {
         setLoading(true);
-        // Load cast, favourites, collections, and clips details in parallel
-        const [castRes, favsRes, colRes, clipsRes] = await Promise.all([
-          api.get('/cast'),
+        // Load stats and popular sections in parallel
+        const [moviesRes, castRes, favsRes, colRes, popularMoviesRes, popularCastRes] = await Promise.all([
+          api.get('/movies?limit=1'),
+          api.get('/cast?limit=1'),
           api.get('/favourites'),
           api.get('/collections'),
-          api.get('/clips')
+          api.get('/movies/popular'),
+          api.get('/cast/popular')
         ]);
 
-        const castList = castRes.data.casts || [];
         const favsList = favsRes.data;
-        const colList = colRes.data;
-        const clipsList = clipsRes.data || [];
+        const favsCount = (favsList.movies?.length || 0) + (favsList.cast?.length || 0) + (favsList.clips?.length || 0);
 
-        // Calculate statistics
-        const favsCount = (favsList.cast?.length || 0) + (favsList.clips?.length || 0);
-        
         setStats({
-          cast: castList.length,
+          movies: moviesRes.data.totalMovies || 0,
+          cast: castRes.data.totalCasts || 0,
           favourites: favsCount,
-          collections: colList.length,
-          clips: clipsList.length
+          collections: colRes.data.length || 0
         });
 
-        // Get female cast members (Actresses) for featured block
-        const actresses = castList
-          .filter((member) => member.gender === 'Female')
-          .slice(0, 4);
-        setFeaturedActresses(actresses);
+        // Set popular movies and cast (limit to 4 on dashboard)
+        setPopularMovies((popularMoviesRes.data || []).slice(0, 4));
+        setPopularCast((popularCastRes.data || []).slice(0, 4));
 
       } catch (error) {
         console.error('Failed to load dashboard data:', error);
@@ -68,7 +65,7 @@ const Home = () => {
           <span>Hello, {user.name}</span>
         </h1>
         <p className="welcome-subtext">
-          Welcome to CineTrack, your personal directory for tracking your favorite actresses and cast profiles.
+          Welcome to CineTrack, your personal catalogue for tracking movies, TV shows, and cast members.
         </p>
       </header>
 
@@ -81,6 +78,13 @@ const Home = () => {
         <div className="stats-grid">
           <div className="stat-card flex-between">
             <div>
+              <span className="stat-label">Tracked Movies</span>
+              <span className="stat-val">{stats.movies}</span>
+            </div>
+            <Film size={32} className="stat-icon" />
+          </div>
+          <div className="stat-card flex-between">
+            <div>
               <span className="stat-label">Cast Profiles</span>
               <span className="stat-val">{stats.cast}</span>
             </div>
@@ -88,7 +92,7 @@ const Home = () => {
           </div>
           <div className="stat-card flex-between">
             <div>
-              <span className="stat-label">Favorites</span>
+              <span className="stat-label">Favourites</span>
               <span className="stat-val">{stats.favourites}</span>
             </div>
             <Heart size={32} className="stat-icon" />
@@ -100,22 +104,47 @@ const Home = () => {
             </div>
             <FolderOpen size={32} className="stat-icon" />
           </div>
-          <div className="stat-card flex-between">
-            <div>
-              <span className="stat-label">Clip Room</span>
-              <span className="stat-val">{stats.clips}</span>
-            </div>
-            <Video size={32} className="stat-icon" />
-          </div>
         </div>
       </section>
 
-      {/* Featured Actresses */}
-      <section className="featured-actresses-section">
+      {/* Popular Movies Section */}
+      <section className="dashboard-section" style={{ marginBottom: '2.5rem' }}>
         <div className="flex-between section-header-row">
-          <h2 className="section-title">Featured Actresses</h2>
+          <h2 className="section-title">Popular Movies (TMDB)</h2>
+          <Link to="/movies" className="explore-all-link flex-center">
+            <span>Explore Movies</span>
+            <ArrowRight size={14} style={{ marginLeft: '0.25rem' }} />
+          </Link>
+        </div>
+
+        {loading ? (
+          <div className="section-loading flex-center">
+            <Loader2 size={24} className="spinner" style={{ marginRight: '0.5rem' }} />
+            <span>Loading popular movies...</span>
+          </div>
+        ) : popularMovies.length === 0 ? (
+          <div className="empty-section-message">
+            No popular movies cached yet. Check back shortly.
+          </div>
+        ) : (
+          <div className="grid-cards">
+            {popularMovies.map((movie) => (
+              <MovieCard 
+                key={movie.refId || movie._id} 
+                movie={movie} 
+                userFavourites={[]}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      {/* Popular Cast Section */}
+      <section className="dashboard-section">
+        <div className="flex-between section-header-row">
+          <h2 className="section-title">Popular Cast Members</h2>
           <Link to="/cast" className="explore-all-link flex-center">
-            <span>Explore All Profiles</span>
+            <span>Explore Cast</span>
             <ArrowRight size={14} style={{ marginLeft: '0.25rem' }} />
           </Link>
         </div>
@@ -123,16 +152,20 @@ const Home = () => {
         {loading ? (
           <div className="section-loading flex-center">
             <Loader2 size={24} className="spinner" style={{ marginRight: '0.5rem' }} />
-            <span>Loading actresses...</span>
+            <span>Loading popular cast...</span>
           </div>
-        ) : featuredActresses.length === 0 ? (
+        ) : popularCast.length === 0 ? (
           <div className="empty-section-message">
-            No actress profiles added yet. Search live from TMDB in Cast Profiles to import them.
+            No popular cast profiles cached yet. Check back shortly.
           </div>
         ) : (
           <div className="grid-cards" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-            {featuredActresses.map((actress) => (
-              <CastCard key={actress._id} cast={actress} />
+            {popularCast.map((actress) => (
+              <CastCard 
+                key={actress.refId || actress._id} 
+                cast={actress} 
+                userFavourites={[]}
+              />
             ))}
           </div>
         )}

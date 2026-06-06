@@ -320,3 +320,13 @@ exports.previewExternalCast = async (req, res) => {
     res.status(500).json({ message: 'Previewing external cast failed', error: error.message });
   }
 };
+
+// Controller: Get popular cast members (cached weekly)
+exports.getPopularCast = async (req, res) => {
+  try {
+    const popular = await Cast.find({ isPopular: true }).sort({ name: 1 }).limit(20);
+    res.json(popular);
+  } catch (error) {
+    res.status(500).json({ message: 'Fetching popular cast members failed', error: error.message });
+  }
+};

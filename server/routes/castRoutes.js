@@ -24,6 +24,11 @@ router.get('/external-details-preview', auth, castController.previewExternalCast
 // @access  Private
 router.post('/import-external', auth, castController.importExternalCast);
 
+// @route   GET /api/cast/popular
+// @desc    Get live popular cast members (cached weekly)
+// @access  Private
+router.get('/popular', auth, castController.getPopularCast);
+
 // @route   GET /api/cast/:id
 // @desc    Get detailed cast profile (with dynamic filmography)
 // @access  Private

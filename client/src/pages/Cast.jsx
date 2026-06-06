@@ -75,21 +75,8 @@ const Cast = () => {
       navigate(`/cast/${member.refId}`);
       return;
     }
-
-    setImportingCast(true);
-    setImportError(null);
-    try {
-      const response = await api.post('/cast/import-external', {
-        tmdbId: member.refId || member.tmdbId,
-        name: member.name
-      });
-      navigate(`/cast/${response.data._id}`);
-    } catch (err) {
-      console.error('On-the-fly cast import failed:', err);
-      setImportError(err.response?.data?.message || 'Failed to import cast profile on-the-fly.');
-    } finally {
-      setImportingCast(false);
-    }
+    // Route to preview page
+    navigate(`/cast/tmdb-${member.refId}?source=${member.source || 'tmdb'}`);
   };
 
   // Perform cascading filters locally

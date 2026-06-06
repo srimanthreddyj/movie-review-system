@@ -96,26 +96,8 @@ const Movies = () => {
       navigate(`/movies/${movie.refId}`);
       return;
     }
-
-    setImportingMovie(true);
-    setImportError(null);
-    try {
-      const response = await api.get('/movies/external-details', {
-        params: {
-          refId: movie.refId,
-          source: movie.source,
-          mediaType: movie.mediaType || 'movie',
-          title: movie.title,
-          onlyActresses: 'false'
-        }
-      });
-      navigate(`/movies/${response.data._id}`);
-    } catch (err) {
-      console.error('Auto import failed:', err);
-      setImportError(err.response?.data?.message || 'Failed to import movie details on-the-fly.');
-    } finally {
-      setImportingMovie(false);
-    }
+    // Route to preview page
+    navigate(`/movies/tmdb-${movie.refId}?source=${movie.source || 'tmdb'}&mediaType=${movie.mediaType || 'movie'}`);
   };
 
   // Perform local cascading filters on movies array

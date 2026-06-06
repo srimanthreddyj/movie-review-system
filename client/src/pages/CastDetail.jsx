@@ -1,16 +1,21 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import api, { getProxiedImageUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import FavouriteButton from '../components/FavouriteButton';
 import MovieCard from '../components/MovieCard';
 import CommentSection from '../components/CommentSection';
 import AddToCollectionModal from '../components/AddToCollectionModal';
-import { ArrowLeft, User, Calendar, Globe, AlertTriangle, Video, FolderPlus } from 'lucide-react';
+import { ArrowLeft, User, Calendar, Globe, AlertTriangle, Video, FolderPlus, Sparkles, MessageSquare } from 'lucide-react';
 
 const CastDetail = () => {
   const { id } = useParams();
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const isExternal = id.startsWith('tmdb-');
+
   const [castMember, setCastMember] = useState(null);
   const [filmography, setFilmography] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,9 +27,22 @@ const CastDetail = () => {
   // Collection Modal State
   const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
 
+  // Open collections modal if redirected with state from preview page
   useEffect(() => {
-    fetchCastDetails();
-    fetchUserFavourites();
+    if (location.state?.openCollections) {
+      setIsCollectionModalOpen(true);
+      window.history.replaceState({}, document.title);
+    }
+  }, [location]);
+
+  useEffect(() => {
+    if (isExternal) {
+      fetchExternalCastDetails();
+      setUserFavs([]);
+    } else {
+      fetchCastDetails();
+      fetchUserFavourites();
+    }
   }, [id]);
 
   const fetchCastDetails = async () => {
@@ -39,6 +57,62 @@ const CastDetail = () => {
       setError(err.response?.data?.message || 'Could not find the requested cast member.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchExternalCastDetails = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const refId = id.replace(/^tmdb-/, '');
+      const response = await api.get('/cast/external-details-preview', {
+        params: { tmdbId: refId }
+      });
+      setCastMember(response.data);
+      setFilmography([]);
+    } catch (err) {
+      console.error('Failed to load external cast details:', err);
+      setError(err.response?.data?.message || 'Could not load preview details for cast member.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const ensureImported = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const refId = id.replace(/^tmdb-/, '');
+      const response = await api.post('/cast/import-external', {
+        tmdbId: refId,
+        name: castMember.name
+      });
+      return response.data._id;
+    } catch (err) {
+      console.error('On-demand cast import failed:', err);
+      setError(err.response?.data?.message || 'Failed to save cast profile to the database.');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExternalFavourite = async () => {
+    try {
+      const localId = await ensureImported();
+      await api.post(`/favourites/cast/${localId}`);
+      navigate(`/cast/${localId}`, { replace: true });
+    } catch (err) {
+      console.error('Failed to favorite cast profile:', err);
+    }
+  };
+
+  const handleExternalSaveToCollection = async () => {
+    try {
+      const localId = await ensureImported();
+      navigate(`/cast/${localId}`, { replace: true, state: { openCollections: true } });
+    } catch (err) {
+      console.error('Failed to save cast to collection:', err);
     }
   };
 
@@ -72,6 +146,29 @@ const CastDetail = () => {
 
   return (
     <div className="container detail-container">
+      {/* External Preview Warning Banner */}
+      {isExternal && (
+        <div className="flex-between" style={{
+          backgroundColor: 'var(--accent-light)',
+          border: '1px solid var(--accent-color)',
+          padding: '1rem',
+          borderRadius: 'var(--border-radius)',
+          marginBottom: '1.5rem',
+          flexWrap: 'wrap',
+          gap: '1rem'
+        }}>
+          <div className="flex-center" style={{ gap: '0.5rem', textAlign: 'left' }}>
+            <Sparkles size={18} className="ai-spark-icon" style={{ color: 'var(--accent-color)' }} />
+            <span style={{ fontSize: '0.9rem', fontWeight: '500', color: 'var(--text-primary)' }}>
+              This cast member is a live preview from TMDB. Save them to CineTrack to enable private notes and collections.
+            </span>
+          </div>
+          <button onClick={ensureImported} className="btn btn-accent btn-sm flex-center">
+            Save to Catalogue
+          </button>
+        </div>
+      )}
+
       {/* Back button */}
       <Link to="/cast" className="back-link flex-center" style={{ justifyContent: 'flex-start', marginBottom: '1.5rem', gap: '0.25rem' }}>
         <ArrowLeft size={14} />
@@ -124,14 +221,27 @@ const CastDetail = () => {
           </div>
 
           <div className="flex-center" style={{ marginTop: '1.5rem', gap: '0.75rem', flexDirection: 'column', width: '100%' }}>
-            <FavouriteButton 
-              entityType="cast" 
-              entityId={id} 
-              favouritesList={userFavs}
-              onUpdate={fetchUserFavourites}
-            />
+            {isExternal ? (
+              <button 
+                onClick={handleExternalFavourite} 
+                disabled={loading} 
+                className="btn fav-btn flex-center"
+                style={{ width: '100%' }}
+              >
+                <Globe size={16} style={{ marginRight: '0.5rem' }} />
+                <span>Add to Favourites</span>
+              </button>
+            ) : (
+              <FavouriteButton 
+                entityType="cast" 
+                entityId={id} 
+                favouritesList={userFavs}
+                onUpdate={fetchUserFavourites}
+              />
+            )}
+            
             <button 
-              onClick={() => setIsCollectionModalOpen(true)}
+              onClick={isExternal ? handleExternalSaveToCollection : () => setIsCollectionModalOpen(true)}
               className="btn btn-secondary flex-center"
               style={{ gap: '0.5rem', width: '100%', minHeight: '40px' }}
             >
@@ -177,7 +287,20 @@ const CastDetail = () => {
       </div>
 
       {/* Private Notes Section */}
-      <CommentSection entityType="cast" entityId={id} />
+      {isExternal ? (
+        <div className="comment-section" style={{ textAlign: 'center', padding: '2.5rem 1rem', marginTop: '2rem' }}>
+          <MessageSquare size={36} style={{ color: 'var(--text-muted)', opacity: 0.6, marginBottom: '0.75rem' }} />
+          <h3 style={{ fontSize: '1.125rem', margin: 0 }}>Reviews and Notes are locked</h3>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', maxWidth: '340px', margin: '0.5rem auto 1rem auto' }}>
+            Private personal notes, reviews, and logs are disabled for previews. Save this profile to your database to start taking notes.
+          </p>
+          <button onClick={ensureImported} className="btn btn-secondary btn-sm">
+            Save to Catalogue
+          </button>
+        </div>
+      ) : (
+        <CommentSection entityType="cast" entityId={id} />
+      )}
 
       <AddToCollectionModal 
         isOpen={isCollectionModalOpen}

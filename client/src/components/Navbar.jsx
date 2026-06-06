@@ -12,69 +12,105 @@ const Navbar = () => {
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
   const [isOpen, setIsOpen] = useState(false);
 
-  // Autocomplete search states
-  const [searchQuery, setSearchQuery] = useState('');
-  const [suggestions, setSuggestions] = useState([]);
-  const [isLoading, setIsLoading] = useState(false);
-  const [showDropdown, setShowDropdown] = useState(false);
+  // Movie search states
+  const [movieQuery, setMovieQuery] = useState('');
+  const [movieSuggestions, setMovieSuggestions] = useState([]);
+  const [isMovieLoading, setIsMovieLoading] = useState(false);
+  const [showMovieDropdown, setShowMovieDropdown] = useState(false);
 
-  // Preview Modal state
-  const [previewOpen, setPreviewOpen] = useState(false);
-  const [previewEntity, setPreviewEntity] = useState(null);
+  // Cast search states
+  const [castQuery, setCastQuery] = useState('');
+  const [castSuggestions, setCastSuggestions] = useState([]);
+  const [isCastLoading, setIsCastLoading] = useState(false);
+  const [showCastDropdown, setShowCastDropdown] = useState(false);
 
   // Close suggestions when clicking outside
   useEffect(() => {
     const handleOutsideClick = (e) => {
-      if (!e.target.closest('.navbar-search-wrapper')) {
-        setShowDropdown(false);
+      if (!e.target.closest('.movie-search-wrapper')) {
+        setShowMovieDropdown(false);
+      }
+      if (!e.target.closest('.cast-search-wrapper')) {
+        setShowCastDropdown(false);
       }
     };
     document.addEventListener('click', handleOutsideClick);
     return () => document.removeEventListener('click', handleOutsideClick);
   }, []);
 
-  // Debounced search logic for autocomplete (searching cast profiles)
+  // Debounced search logic for Movie autocomplete
   useEffect(() => {
-    if (searchQuery.trim().length < 2) {
-      setSuggestions([]);
-      setShowDropdown(false);
+    if (movieQuery.trim().length < 2) {
+      setMovieSuggestions([]);
+      setShowMovieDropdown(false);
       return;
     }
 
     const timer = setTimeout(async () => {
-      setIsLoading(true);
+      setIsMovieLoading(true);
       try {
-        const response = await api.get('/cast/search-external', {
-          params: { q: searchQuery }
+        const response = await api.get('/movies/search', {
+          params: { q: movieQuery }
         });
-        setSuggestions(response.data || []);
-        setShowDropdown(true);
+        setMovieSuggestions(response.data || []);
+        setShowMovieDropdown(true);
       } catch (err) {
-        console.error('Autocomplete fetch failed:', err);
+        console.error('Movie Autocomplete fetch failed:', err);
       } finally {
-        setIsLoading(false);
+        setIsMovieLoading(false);
       }
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [searchQuery]);
+  }, [movieQuery]);
 
-  const handleSuggestionClick = (item) => {
-    setSearchQuery('');
-    setSuggestions([]);
-    setShowDropdown(false);
+  // Debounced search logic for Cast autocomplete
+  useEffect(() => {
+    if (castQuery.trim().length < 2) {
+      setCastSuggestions([]);
+      setShowCastDropdown(false);
+      return;
+    }
 
-    const isLocal = item.source === 'local';
-    if (isLocal) {
+    const timer = setTimeout(async () => {
+      setIsCastLoading(true);
+      try {
+        const response = await api.get('/cast/search-external', {
+          params: { q: castQuery }
+        });
+        setCastSuggestions(response.data || []);
+        setShowCastDropdown(true);
+      } catch (err) {
+        console.error('Cast Autocomplete fetch failed:', err);
+      } finally {
+        setIsCastLoading(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [castQuery]);
+
+  const handleMovieSuggestionClick = (item) => {
+    setMovieQuery('');
+    setMovieSuggestions([]);
+    setShowMovieDropdown(false);
+
+    if (item.source === 'local') {
+      navigate(`/movies/${item.refId}`);
+    } else {
+      navigate(`/movies/tmdb-${item.refId}?source=${item.source || 'tmdb'}&mediaType=${item.mediaType || 'movie'}`);
+    }
+  };
+
+  const handleCastSuggestionClick = (item) => {
+    setCastQuery('');
+    setCastSuggestions([]);
+    setShowCastDropdown(false);
+
+    if (item.source === 'local') {
       navigate(`/cast/${item.refId}`);
     } else {
-      setPreviewEntity({
-        refId: item.refId || item.tmdbId,
-        source: item.source || 'tmdb',
-        type: 'person',
-        title: item.name || item.title
-      });
-      setPreviewOpen(true);
+      navigate(`/cast/tmdb-${item.refId}?source=${item.source || 'tmdb'}`);
     }
   };
 
@@ -96,12 +132,16 @@ const Navbar = () => {
 
   const isActive = (path) => location.pathname === path;
 
-  // Render navigation links (Removing Movies catalogue)
+  // Render navigation links
   const renderLinks = (isMobile = false) => {
     const linkClass = (path) => `nav-link ${isActive(path) ? 'active' : ''} ${isMobile ? 'mobile-link' : ''}`;
     
     return (
       <>
+        <Link to="/movies" className={linkClass('/movies')} onClick={() => setIsOpen(false)}>
+          <Film size={18} className="link-icon" />
+          <span>Movies & Shows</span>
+        </Link>
         <Link to="/cast" className={linkClass('/cast')} onClick={() => setIsOpen(false)}>
           <Users size={18} className="link-icon" />
           <span>Cast Profiles</span>
@@ -137,54 +177,117 @@ const Navbar = () => {
           <span className="brand-text">CineTrack</span>
         </Link>
 
-        {/* Global Autocomplete Search Input */}
-        <div className="navbar-search-wrapper">
-          <div className="navbar-search-field">
-            <Search size={16} className="search-field-icon" />
-            <input
-              type="text"
-              placeholder="Search movies, shows, persons..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onFocus={() => { if (suggestions.length > 0) setShowDropdown(true); }}
-            />
-            {isLoading && <Loader2 size={14} className="search-field-spinner spinner" />}
-          </div>
+        {/* Dual Search Input Boxes */}
+        <div className="navbar-search-container">
+          {/* Movies & Shows Search */}
+          <div className="navbar-search-wrapper movie-search-wrapper">
+            <div className="navbar-search-field">
+              <Search size={16} className="search-field-icon" />
+              <input
+                type="text"
+                placeholder="Search movies & shows..."
+                value={movieQuery}
+                onChange={(e) => setMovieQuery(e.target.value)}
+                onFocus={() => { if (movieSuggestions.length > 0) setShowMovieDropdown(true); }}
+              />
+              {isMovieLoading && <Loader2 size={14} className="search-field-spinner spinner" />}
+            </div>
 
-          {showDropdown && suggestions.length > 0 && (
-            <div className="navbar-suggestions-dropdown">
-              {suggestions.map((item, index) => (
-                <div
-                   key={index}
-                   className="navbar-suggestion-item"
-                   onClick={() => handleSuggestionClick(item)}
-                >
-                  <div className="suggestion-item-main">
-                    {item.posterUrl || item.photoUrl ? (
-                      <img src={getProxiedImageUrl(item.posterUrl || item.photoUrl)} alt={item.title || item.name} className="suggestion-item-img" />
-                    ) : (
-                      <div className="suggestion-item-img-fallback flex-center">
-                        <User size={14} />
+            {showMovieDropdown && movieSuggestions.length > 0 && (
+              <div className="navbar-suggestions-dropdown">
+                {movieSuggestions.map((item, index) => (
+                  <div
+                     key={index}
+                     className="navbar-suggestion-item"
+                     onClick={() => handleMovieSuggestionClick(item)}
+                  >
+                    <div className="suggestion-item-main">
+                      {item.posterUrl ? (
+                        <img src={getProxiedImageUrl(item.posterUrl)} alt={item.title} className="suggestion-item-img" />
+                      ) : (
+                        <div className="suggestion-item-img-fallback flex-center">
+                          <Film size={14} />
+                        </div>
+                      )}
+                      <div className="suggestion-item-meta">
+                        <span className="suggestion-item-title">{item.title}</span>
+                        {item.releaseDate && (
+                          <span className="suggestion-item-year">
+                            {new Date(item.releaseDate).getFullYear()}
+                          </span>
+                        )}
                       </div>
-                    )}
-                    <div className="suggestion-item-meta">
-                      <span className="suggestion-item-title">{item.title || item.name}</span>
+                    </div>
+                    <div className="suggestion-item-tags">
+                      <span className={`badge-outline-sm type-${item.mediaType === 'series' ? 'series' : 'movie'}`}>
+                        {item.mediaType === 'series' ? 'show' : 'movie'}
+                      </span>
+                      {item.source === 'local' ? (
+                        <span className="badge-success-sm">Saved</span>
+                      ) : (
+                        <span className="badge-secondary-sm">TMDB</span>
+                      )}
                     </div>
                   </div>
-                  <div className="suggestion-item-tags">
-                    <span className="badge-outline-sm type-person">
-                      person
-                    </span>
-                    {item.source === 'local' ? (
-                      <span className="badge-success-sm">Saved</span>
-                    ) : (
-                      <span className="badge-secondary-sm">TMDB</span>
-                    )}
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Cast Members Search */}
+          <div className="navbar-search-wrapper cast-search-wrapper">
+            <div className="navbar-search-field">
+              <Search size={16} className="search-field-icon" />
+              <input
+                type="text"
+                placeholder="Search cast members..."
+                value={castQuery}
+                onChange={(e) => setCastQuery(e.target.value)}
+                onFocus={() => { if (castSuggestions.length > 0) setShowCastDropdown(true); }}
+              />
+              {isCastLoading && <Loader2 size={14} className="search-field-spinner spinner" />}
             </div>
-          )}
+
+            {showCastDropdown && castSuggestions.length > 0 && (
+              <div className="navbar-suggestions-dropdown">
+                {castSuggestions.map((item, index) => (
+                  <div
+                     key={index}
+                     className="navbar-suggestion-item"
+                     onClick={() => handleCastSuggestionClick(item)}
+                  >
+                    <div className="suggestion-item-main">
+                      {item.photoUrl ? (
+                        <img src={getProxiedImageUrl(item.photoUrl)} alt={item.name} className="suggestion-item-img" />
+                      ) : (
+                        <div className="suggestion-item-img-fallback flex-center">
+                          <User size={14} />
+                        </div>
+                      )}
+                      <div className="suggestion-item-meta">
+                        <span className="suggestion-item-title">{item.name}</span>
+                        {item.knownFor && (
+                          <span className="suggestion-item-year" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }}>
+                            {item.knownFor}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    <div className="suggestion-item-tags">
+                      <span className="badge-outline-sm type-person">
+                        person
+                      </span>
+                      {item.source === 'local' ? (
+                        <span className="badge-success-sm">Saved</span>
+                      ) : (
+                        <span className="badge-secondary-sm">TMDB</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
         {/* Desktop Navigation Links */}
@@ -248,18 +351,6 @@ const Navbar = () => {
             </div>
           </div>
         </div>
-      )}
-
-      {/* External Preview Modal */}
-      {previewEntity && (
-        <ExternalPreviewModal
-          isOpen={previewOpen}
-          onClose={() => { setPreviewOpen(false); setPreviewEntity(null); }}
-          entityRefId={previewEntity.refId}
-          entitySource={previewEntity.source}
-          entityType={previewEntity.type}
-          entityTitle={previewEntity.title}
-        />
       )}
 
       <style>{`
@@ -438,13 +529,23 @@ const Navbar = () => {
         }
 
         /* Autocomplete Search Styles */
+        .navbar-search-container {
+          display: flex;
+          align-items: center;
+          gap: 0.5rem;
+        }
         .navbar-search-wrapper {
           position: relative;
-          width: 320px;
-          margin: 0 1rem;
+          width: 180px;
+          margin: 0;
+        }
+        @media (min-width: 1200px) {
+          .navbar-search-wrapper {
+            width: 220px;
+          }
         }
         @media (max-width: 1024px) {
-          .navbar-search-wrapper {
+          .navbar-search-container {
             display: none;
           }
         }

@@ -41,6 +41,11 @@ const CastSchema = new mongoose.Schema({
   dataSource: {
     type: String,
     default: 'manual'
+  },
+  isPopular: {
+    type: Boolean,
+    default: false,
+    index: true
   }
 }, {
   timestamps: true

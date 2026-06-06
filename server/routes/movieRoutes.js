@@ -33,6 +33,11 @@ router.get('/external-details-preview', auth, movieController.previewExternalDet
 // @desc    Proxy TMDB images to bypass client ISP blocks (Public)
 router.get('/image-proxy', movieController.proxyImage);
 
+// @route   GET /api/movies/popular
+// @desc    Get live popular movies (cached weekly)
+// @access  Private
+router.get('/popular', auth, movieController.getPopularMovies);
+
 // @route   GET /api/movies/:id
 // @desc    Get saved movie details (with populated cast members)
 // @access  Private

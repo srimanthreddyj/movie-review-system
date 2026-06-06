@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import api, { getProxiedImageUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import FavouriteButton from '../components/FavouriteButton';
@@ -12,6 +12,11 @@ import { Film, Calendar, Globe, Star, Sparkles, Clock, AlertTriangle, ArrowLeft,
 const MovieDetail = () => {
   const { id } = useParams();
   const { user } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  
+  const isExternal = id.startsWith('tmdb-');
+  
   const [movie, setMovie] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -30,10 +35,25 @@ const MovieDetail = () => {
   const [movieTags, setMovieTags] = useState([]);
   const [showTagDropdown, setShowTagDropdown] = useState(false);
 
+  // Open collections modal if redirected with state from preview page
   useEffect(() => {
-    fetchMovieDetails();
-    fetchUserFavourites();
-    fetchMovieTags();
+    if (location.state?.openCollections) {
+      setIsCollectionModalOpen(true);
+      // Clean up location state
+      window.history.replaceState({}, document.title);
+    }
+  }, [location]);
+
+  useEffect(() => {
+    if (isExternal) {
+      fetchExternalMovieDetails();
+      setUserFavs([]);
+      setMovieTags([]);
+    } else {
+      fetchMovieDetails();
+      fetchUserFavourites();
+      fetchMovieTags();
+    }
   }, [id]);
 
   const fetchMovieDetails = async () => {
@@ -50,6 +70,45 @@ const MovieDetail = () => {
     }
   };
 
+  const fetchExternalMovieDetails = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const searchParams = new URLSearchParams(location.search);
+      const source = searchParams.get('source') || 'tmdb';
+      const mediaType = searchParams.get('mediaType') || 'movie';
+      const refId = id.replace(/^tmdb-/, '');
+
+      const response = await api.get('/movies/external-details-preview', {
+        params: { refId, source, mediaType }
+      });
+      
+      // Normalize the cast list for the preview page so it conforms to the structure of CastCard expect
+      const details = response.data;
+      if (details && details.cast) {
+        details.cast = details.cast.map((actor, idx) => ({
+          _id: actor.tmdbId || `preview-cast-${idx}`,
+          characterName: actor.characterName,
+          role: actor.role,
+          castId: {
+            _id: actor.tmdbId || `preview-cast-${idx}`,
+            name: actor.name,
+            photoUrl: actor.photoUrl,
+            knownFor: actor.knownFor,
+            gender: actor.gender,
+            source: 'tmdb'
+          }
+        }));
+      }
+      setMovie(details);
+    } catch (err) {
+      console.error('Failed to load preview details:', err);
+      setError(err.response?.data?.message || 'Could not load preview details from TMDB.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const fetchUserFavourites = async () => {
     try {
       const response = await api.get('/favourites');
@@ -61,15 +120,10 @@ const MovieDetail = () => {
 
   const fetchMovieTags = async () => {
     try {
-      // Find all tag assignments for this movie
       const response = await api.get('/tags');
       const tagsData = response.data || [];
-      // Resolve which tags are currently assigned to this movie
-      // In a real database, we would query TagAssignment, but since assignments are scoped to the user,
-      // we check for this movie ID. Let's fetch assigned tags.
       const assigned = [];
       for (const tag of tagsData) {
-        // Query assignments for this tag
         try {
           const assignRes = await api.get(`/tags?tagId=${tag._id}`);
           const hasMovie = assignRes.data.movies.some(m => m._id.toString() === id);
@@ -83,6 +137,81 @@ const MovieDetail = () => {
       setMovieTags(assigned);
     } catch (err) {
       console.error('Failed to load tags:', err);
+    }
+  };
+
+  const ensureImported = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const searchParams = new URLSearchParams(location.search);
+      const source = searchParams.get('source') || 'tmdb';
+      const mediaType = searchParams.get('mediaType') || 'movie';
+      const refId = id.replace(/^tmdb-/, '');
+
+      const response = await api.get('/movies/external-details', {
+        params: {
+          refId,
+          source,
+          mediaType,
+          title: movie.title,
+          onlyActresses: 'false'
+        }
+      });
+      return response.data._id;
+    } catch (err) {
+      console.error('On-demand import failed:', err);
+      setError(err.response?.data?.message || 'Failed to save movie details to the database.');
+      throw err;
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExternalFavourite = async () => {
+    try {
+      const localId = await ensureImported();
+      await api.post(`/favourites/movies/${localId}`);
+      navigate(`/movies/${localId}`, { replace: true });
+    } catch (err) {
+      console.error('Failed to favorite external item:', err);
+    }
+  };
+
+  const handleExternalSaveToCollection = async () => {
+    try {
+      const localId = await ensureImported();
+      navigate(`/movies/${localId}`, { replace: true, state: { openCollections: true } });
+    } catch (err) {
+      console.error('Failed to save external item to collection:', err);
+    }
+  };
+
+  const handleExternalAssignTag = async (tagId) => {
+    try {
+      const localId = await ensureImported();
+      await api.post(`/tags/${tagId}/assign`, {
+        entityType: 'movie',
+        entityId: localId
+      });
+      navigate(`/movies/${localId}`, { replace: true });
+    } catch (err) {
+      console.error('Failed to assign tag to external item:', err);
+    }
+  };
+
+  const handleExternalGenerateAI = async () => {
+    try {
+      const localId = await ensureImported();
+      setAiLoading(true);
+      setAiWarning('');
+      await api.post(`/movies/${localId}/explanation`);
+      navigate(`/movies/${localId}`, { replace: true });
+    } catch (err) {
+      console.error('Failed to generate AI explanation:', err);
+      setAiWarning('AI Generation failed. Please try again.');
+    } finally {
+      setAiLoading(false);
     }
   };
 
@@ -187,6 +316,29 @@ const MovieDetail = () => {
 
   return (
     <div className="container detail-container">
+      {/* External Preview Warning Banner */}
+      {isExternal && (
+        <div className="flex-between" style={{
+          backgroundColor: 'var(--accent-light)',
+          border: '1px solid var(--accent-color)',
+          padding: '1rem',
+          borderRadius: 'var(--border-radius)',
+          marginBottom: '1.5rem',
+          flexWrap: 'wrap',
+          gap: '1rem'
+        }}>
+          <div className="flex-center" style={{ gap: '0.5rem', textAlign: 'left' }}>
+            <Sparkles size={18} className="ai-spark-icon" />
+            <span style={{ fontSize: '0.9rem', fontWeight: '500', color: 'var(--text-primary)' }}>
+              This movie is a live preview from TMDB. Save it to CineTrack to enable private notes, tags, and collections.
+            </span>
+          </div>
+          <button onClick={ensureImported} className="btn btn-accent btn-sm flex-center">
+            Save to Catalogue
+          </button>
+        </div>
+      )}
+
       {/* Back button */}
       <Link to="/movies" className="back-link flex-center" style={{ justifyContent: 'flex-start', marginBottom: '1.5rem', gap: '0.25rem' }}>
         <ArrowLeft size={14} />
@@ -240,14 +392,26 @@ const MovieDetail = () => {
       {/* Action Row: Favourites & Tag Management */}
       <section className="detail-actions-row flex-between" style={{ flexWrap: 'wrap', gap: '1rem', margin: '2rem 0' }}>
         <div className="flex-center" style={{ gap: '1rem', flexWrap: 'wrap' }}>
-          <FavouriteButton 
-            entityType="movies" 
-            entityId={id} 
-            favouritesList={userFavs}
-            onUpdate={fetchUserFavourites}
-          />
+          {isExternal ? (
+            <button 
+              onClick={handleExternalFavourite} 
+              disabled={loading} 
+              className="btn fav-btn flex-center"
+            >
+              <Heart size={16} style={{ marginRight: '0.5rem' }} />
+              <span>Add to Favourites</span>
+            </button>
+          ) : (
+            <FavouriteButton 
+              entityType="movies" 
+              entityId={id} 
+              favouritesList={userFavs}
+              onUpdate={fetchUserFavourites}
+            />
+          )}
+          
           <button 
-            onClick={() => setIsCollectionModalOpen(true)}
+            onClick={isExternal ? handleExternalSaveToCollection : () => setIsCollectionModalOpen(true)}
             className="btn btn-secondary flex-center"
             style={{ gap: '0.5rem', minHeight: '40px' }}
           >
@@ -259,7 +423,7 @@ const MovieDetail = () => {
         {/* Tags Assignment UI */}
         <div className="detail-tags-manager" style={{ position: 'relative' }}>
           <div className="assigned-tags-list flex-center" style={{ gap: '0.375rem', flexWrap: 'wrap' }}>
-            {movieTags.map((tag) => (
+            {!isExternal && movieTags.map((tag) => (
               <span 
                 key={tag._id} 
                 className="tag-badge flex-center" 
@@ -291,7 +455,7 @@ const MovieDetail = () => {
                 user?.tags?.filter(t => !movieTags.some(mt => mt._id === t._id)).map((tag) => (
                   <button 
                     key={tag._id} 
-                    onClick={() => handleAssignTag(tag._id)} 
+                    onClick={() => isExternal ? handleExternalAssignTag(tag._id) : handleAssignTag(tag._id)} 
                     className="tags-dropdown-item flex-center"
                     style={{ justifyContent: 'flex-start', gap: '0.5rem' }}
                   >
@@ -327,6 +491,7 @@ const MovieDetail = () => {
                       key={c._id} 
                       cast={c.castId} 
                       characterName={c.characterName} 
+                      onClick={(actor) => navigate(`/cast/tmdb-${actor.tmdbId || actor._id}?source=tmdb`)}
                     />
                   )
                 ))}
@@ -357,7 +522,7 @@ const MovieDetail = () => {
                 <Sparkles size={20} className="ai-spark-icon" style={{ marginRight: '0.5rem' }} />
                 <span>AI Critic Explanation</span>
               </h2>
-              {explanation && (
+              {explanation && !isExternal && (
                 <button 
                   onClick={handleGenerateAIExplanation} 
                   disabled={aiLoading} 
@@ -396,8 +561,16 @@ const MovieDetail = () => {
               <div className="ai-placeholder flex-center">
                 <Sparkles size={36} className="ai-placeholder-icon" />
                 <h3>No explanation generated yet</h3>
-                <p>Click below to generate a detailed plot analysis, performance breakdown, and themes explanation from Google Gemini.</p>
-                <button onClick={handleGenerateAIExplanation} className="btn btn-accent flex-center" style={{ gap: '0.5rem' }}>
+                <p>
+                  {isExternal 
+                    ? "Save to your catalogue first to generate an AI plot critique, performance breakdown, and themes explanation from Google Gemini."
+                    : "Click below to generate a detailed plot analysis, performance breakdown, and themes explanation from Google Gemini."}
+                </p>
+                <button 
+                  onClick={isExternal ? handleExternalGenerateAI : handleGenerateAIExplanation} 
+                  className="btn btn-accent flex-center" 
+                  style={{ gap: '0.5rem' }}
+                >
                   <Sparkles size={16} />
                   <span>Generate AI Explanation</span>
                 </button>
@@ -408,7 +581,20 @@ const MovieDetail = () => {
       </div>
 
       {/* Private Notes Section */}
-      <CommentSection entityType="movie" entityId={id} />
+      {isExternal ? (
+        <div className="comment-section" style={{ textAlign: 'center', padding: '2.5rem 1rem' }}>
+          <MessageSquare size={36} style={{ color: 'var(--text-muted)', opacity: 0.6, marginBottom: '0.75rem' }} />
+          <h3 style={{ fontSize: '1.125rem', margin: 0 }}>Reviews and Notes are locked</h3>
+          <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', maxWidth: '340px', margin: '0.5rem auto 1rem auto' }}>
+            Private personal notes, reviews, and logs are disabled for previews. Save this title to your database to start taking notes.
+          </p>
+          <button onClick={ensureImported} className="btn btn-secondary btn-sm">
+            Save to Catalogue
+          </button>
+        </div>
+      ) : (
+        <CommentSection entityType="movie" entityId={id} />
+      )}
 
       <AddToCollectionModal 
         isOpen={isCollectionModalOpen}

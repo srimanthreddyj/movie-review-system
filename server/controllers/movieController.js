@@ -584,3 +584,188 @@ exports.autocomplete = async (req, res) => {
     res.status(500).json({ message: 'Autocomplete failed', error: error.message });
   }
 };
+
+// Helper to run background popular movies & cast cache sync
+const runPopularSync = async () => {
+  const movieApiService = require('../services/movieApiService');
+  console.log('Background Cache Sync: Starting fetching popular content from TMDB...');
+
+  try {
+    // 1. Fetch & Caching Popular Movies
+    const popularMovies = await movieApiService.getPopularMovies();
+    await Movie.updateMany({ isPopular: true }, { $set: { isPopular: false } });
+
+    for (const item of popularMovies) {
+      let movie = await Movie.findOne({ tmdbId: item.refId });
+      if (movie) {
+        movie.isPopular = true;
+        movie.posterUrl = item.posterUrl || movie.posterUrl;
+        movie.synopsis = item.synopsis || movie.synopsis;
+        movie.rating = item.rating || movie.rating;
+        await movie.save();
+      } else {
+        try {
+          const details = await movieApiService.getMovieDetails(item.refId, 'tmdb', item.title, 'movie');
+          const processedCast = [];
+          if (details.cast && Array.isArray(details.cast)) {
+            for (const actor of details.cast) {
+              if (!actor.name) continue;
+              let castMember = await Cast.findOne({
+                $or: [{ tmdbId: actor.tmdbId }, { name: actor.name }]
+              });
+              if (!castMember) {
+                castMember = new Cast({
+                  name: actor.name,
+                  photoUrl: actor.photoUrl || '',
+                  bio: actor.bio || '',
+                  gender: actor.gender || 'Unspecified',
+                  tmdbId: actor.tmdbId || '',
+                  knownFor: actor.knownFor || 'Actor',
+                  dataSource: 'tmdb'
+                });
+                await castMember.save();
+              } else if (actor.tmdbId && !castMember.tmdbId) {
+                castMember.tmdbId = actor.tmdbId;
+                await castMember.save();
+              }
+              processedCast.push({
+                castId: castMember._id,
+                characterName: actor.characterName || '',
+                role: actor.role || 'Actor'
+              });
+            }
+          }
+
+          const newMovie = new Movie({
+            title: details.title,
+            originalTitle: details.originalTitle || '',
+            language: details.language || 'English',
+            languages: details.languages || ['English'],
+            genre: details.genre || [],
+            releaseDate: details.releaseDate,
+            status: details.status || 'released',
+            mediaType: 'movie',
+            posterUrl: details.posterUrl || '',
+            bannerUrl: details.bannerUrl || '',
+            synopsis: details.synopsis || '',
+            rating: details.rating || 0,
+            imdbId: details.imdbId || '',
+            tmdbId: details.tmdbId || '',
+            dataSource: 'tmdb',
+            isPopular: true,
+            cast: processedCast
+          });
+          await newMovie.save();
+        } catch (movieErr) {
+          console.warn(`Full cache failed for popular movie ID ${item.refId}:`, movieErr.message);
+          const fallbackMovie = new Movie({
+            title: item.title,
+            originalTitle: item.originalTitle || '',
+            releaseDate: item.releaseDate,
+            posterUrl: item.posterUrl,
+            synopsis: item.synopsis,
+            tmdbId: item.refId,
+            dataSource: 'tmdb',
+            isPopular: true,
+            genre: item.genre || []
+          });
+          await fallbackMovie.save();
+        }
+      }
+    }
+
+    // 2. Fetch & Caching Popular Cast Members
+    const popularCast = await movieApiService.getPopularCast();
+    await Cast.updateMany({ isPopular: true }, { $set: { isPopular: false } });
+
+    for (const item of popularCast) {
+      let castMember = await Cast.findOne({ tmdbId: item.tmdbId });
+      if (castMember) {
+        castMember.isPopular = true;
+        castMember.photoUrl = item.photoUrl || castMember.photoUrl;
+        await castMember.save();
+      } else {
+        try {
+          const details = await movieApiService.getTmdbPersonDetails(item.tmdbId);
+          const newCast = new Cast({
+            name: details.name,
+            photoUrl: details.photoUrl || '',
+            bio: details.bio || '',
+            birthDate: details.birthDate,
+            nationality: details.nationality || '',
+            gender: details.gender || 'Unspecified',
+            tmdbId: details.tmdbId,
+            imdbId: details.imdbId || '',
+            dataSource: 'tmdb',
+            isPopular: true
+          });
+          await newCast.save();
+        } catch (castErr) {
+          console.warn(`Full cache failed for popular cast ID ${item.tmdbId}:`, castErr.message);
+          const fallbackCast = new Cast({
+            name: item.name,
+            photoUrl: item.photoUrl,
+            gender: item.gender,
+            knownFor: item.knownForDepartment || 'Actor',
+            tmdbId: item.tmdbId,
+            dataSource: 'tmdb',
+            isPopular: true
+          });
+          await fallbackCast.save();
+        }
+      }
+    }
+
+    console.log('Background Cache Sync: Weekly sync completed successfully.');
+  } catch (err) {
+    console.error('Background Cache Sync failed:', err.message);
+  }
+};
+
+// Helper: check popular cache metadata
+const refreshPopularCacheIfExpired = async () => {
+  try {
+    const CacheMetadata = require('../models/CacheMetadata');
+    const cacheKey = 'popular_cache';
+    let cache = await CacheMetadata.findOne({ key: cacheKey });
+    const now = new Date();
+    const sevenDaysInMs = 7 * 24 * 60 * 60 * 1000;
+
+    if (!cache || (now - cache.lastUpdated > sevenDaysInMs)) {
+      console.log('Popular cache expired or missing. Triggering weekly background cache update...');
+      if (!cache) {
+        cache = new CacheMetadata({ key: cacheKey, lastUpdated: now });
+      } else {
+        cache.lastUpdated = now;
+      }
+      await cache.save();
+      runPopularSync().catch(err => console.error('Popular sync trigger failed:', err.message));
+    }
+  } catch (err) {
+    console.error('Checking popular cache status failed:', err.message);
+  }
+};
+
+// Controller: Get popular movies (with weekly cache refresh check)
+exports.getPopularMovies = async (req, res) => {
+  try {
+    await refreshPopularCacheIfExpired();
+    const popular = await Movie.find({ isPopular: true }).sort({ rating: -1, releaseDate: -1 }).limit(20);
+
+    const formatted = popular.map(movie => ({
+      title: movie.title,
+      originalTitle: movie.originalTitle || '',
+      releaseDate: movie.releaseDate,
+      posterUrl: movie.posterUrl,
+      refId: movie._id.toString(),
+      source: 'local',
+      mediaType: movie.mediaType || 'movie',
+      synopsis: movie.synopsis || '',
+      genre: movie.genre || []
+    }));
+
+    res.json(formatted);
+  } catch (error) {
+    res.status(500).json({ message: 'Fetching popular movies failed', error: error.message });
+  }
+};
