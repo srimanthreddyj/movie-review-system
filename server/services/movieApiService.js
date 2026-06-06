@@ -742,6 +742,111 @@ exports.getTmdbPersonDetails = async (tmdbId) => {
   }
 };
 
+// Fetch movie credits for a person from TMDB (with Gemini fallback)
+exports.getTmdbPersonMovieCredits = async (tmdbId, name) => {
+  const apiKey = process.env.TMDB_API_KEY;
+  let useFallback = !apiKey;
+
+  if (apiKey) {
+    try {
+      const url = `https://api.themoviedb.org/3/person/${tmdbId}/movie_credits?api_key=${apiKey}&language=en-US`;
+      const res = await fetchWithTimeout(url);
+      if (!res.ok) throw new Error(`TMDB Person Credits failed: ${res.statusText}`);
+      const data = await res.json();
+
+      const uniqueCredits = new Map();
+
+      // Helper to add or update credit with priority
+      const addCredit = (item) => {
+        const existing = uniqueCredits.get(item.tmdbId);
+        if (!existing) {
+          uniqueCredits.set(item.tmdbId, item);
+        } else {
+          const rolePriority = { 'Actor': 4, 'Director': 3, 'Writer': 2, 'Producer': 1, 'Composer': 1, 'Crew': 0 };
+          const oldPriority = rolePriority[existing.role] || 0;
+          const newPriority = rolePriority[item.role] || 0;
+          if (newPriority > oldPriority) {
+            uniqueCredits.set(item.tmdbId, item);
+          } else if (newPriority === oldPriority && item.characterName && !existing.characterName) {
+            uniqueCredits.set(item.tmdbId, item);
+          }
+        }
+      };
+
+      // Map cast credits
+      if (data.cast && Array.isArray(data.cast)) {
+        data.cast.forEach(movie => {
+          addCredit({
+            tmdbId: movie.id.toString(),
+            title: movie.title || movie.original_title || 'Untitled',
+            releaseDate: movie.release_date ? new Date(movie.release_date) : null,
+            posterUrl: getTmdbImageUrl(movie.poster_path),
+            characterName: movie.character || '',
+            role: 'Actor'
+          });
+        });
+      }
+
+      // Map crew credits
+      if (data.crew && Array.isArray(data.crew)) {
+        data.crew.forEach(movie => {
+          const role = ['Director', 'Writer', 'Producer', 'Composer'].includes(movie.job) ? movie.job : 'Crew';
+          addCredit({
+            tmdbId: movie.id.toString(),
+            title: movie.title || movie.original_title || 'Untitled',
+            releaseDate: movie.release_date ? new Date(movie.release_date) : null,
+            posterUrl: getTmdbImageUrl(movie.poster_path),
+            characterName: '',
+            role: role
+          });
+        });
+      }
+
+      return Array.from(uniqueCredits.values());
+    } catch (err) {
+      console.warn('TMDB Person Credits fetch failed, attempting Gemini fallback...', err.message);
+      useFallback = true;
+    }
+  }
+
+  if (useFallback && name && process.env.GEMINI_API_KEY) {
+    try {
+      console.log(`API Service: Fetching filmography from Gemini for "${name}"...`);
+      const prompt = `
+        Find a list of key movies that the actor/actress/filmmaker "${name}" acted in or worked on.
+        Provide up to 20 well-known movies.
+        For each movie, provide its official or approximate numeric TMDB ID (if known, otherwise a unique 6-digit mock number).
+        Return the response ONLY as a valid JSON array of objects. Do not wrap in markdown or backticks.
+        Format:
+        [
+          {
+            "tmdbId": "numeric_id_as_string",
+            "title": "Movie Title",
+            "releaseDate": "YYYY-MM-DD",
+            "characterName": "Character Name in the film (or empty if director/crew)",
+            "role": "Actor | Actress | Director | Writer | Producer | Composer"
+          }
+        ]
+      `;
+      const text = await queryGemini(prompt);
+      const cleanJson = text.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
+      const results = JSON.parse(cleanJson);
+      return results.map(movie => ({
+        tmdbId: movie.tmdbId || Math.floor(Math.random() * 899999 + 100000).toString(),
+        title: movie.title,
+        releaseDate: movie.releaseDate ? new Date(movie.releaseDate) : null,
+        posterUrl: '',
+        characterName: movie.characterName || '',
+        role: movie.role || 'Actor'
+      }));
+    } catch (err) {
+      console.error(`Gemini Person Credits Lookup failed for "${name}":`, err.message);
+    }
+  }
+
+  return [];
+};
+
 // Search multiple entities (movies, series, persons) at once using TMDB multi-search (with Gemini fallback)
 exports.searchExternalMulti = async (query) => {
   const apiKey = process.env.TMDB_API_KEY;

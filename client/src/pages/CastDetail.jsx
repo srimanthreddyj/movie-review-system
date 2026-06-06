@@ -6,7 +6,7 @@ import FavouriteButton from '../components/FavouriteButton';
 import MovieCard from '../components/MovieCard';
 import CommentSection from '../components/CommentSection';
 import AddToCollectionModal from '../components/AddToCollectionModal';
-import { ArrowLeft, User, Calendar, Globe, AlertTriangle, Video, FolderPlus, Sparkles, MessageSquare, Heart } from 'lucide-react';
+import { ArrowLeft, User, Calendar, Globe, AlertTriangle, Video, FolderPlus, Sparkles, MessageSquare, Heart, Search } from 'lucide-react';
 
 const CastDetail = () => {
   const { id } = useParams();
@@ -18,6 +18,7 @@ const CastDetail = () => {
 
   const [castMember, setCastMember] = useState(null);
   const [filmography, setFilmography] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   
@@ -69,7 +70,7 @@ const CastDetail = () => {
         params: { tmdbId: refId }
       });
       setCastMember(response.data);
-      setFilmography([]);
+      setFilmography(response.data.filmography || []);
     } catch (err) {
       console.error('Failed to load external cast details:', err);
       setError(err.response?.data?.message || 'Could not load preview details for cast member.');
@@ -239,26 +240,46 @@ const CastDetail = () => {
 
           {/* Filmography Section */}
           <section className="profile-section">
-            <h2>Filmography</h2>
+            <div className="flex-between filmography-header" style={{ marginBottom: '1.25rem', gap: '1rem', flexWrap: 'wrap', alignItems: 'center' }}>
+              <h2 style={{ margin: 0 }}>Filmography</h2>
+              <div className="search-input-wrapper">
+                <Search size={16} className="search-icon" />
+                <input 
+                  type="text" 
+                  placeholder="Search movies..." 
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="search-input"
+                />
+              </div>
+            </div>
             {filmography.length === 0 ? (
               <div className="empty-filmography flex-center">
                 <span>No tracked movies or series linked to this profile.</span>
               </div>
+            ) : filmography.filter(film => film.title && film.title.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
+              <div className="empty-filmography flex-center">
+                <span>No movies found matching "{searchQuery}".</span>
+              </div>
             ) : (
               <div className="grid-cards" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
-                {filmography.map((film) => (
-                  <MovieCard 
-                    key={film.movieId}
-                    movie={{
-                      _id: film.movieId,
-                      title: film.title,
-                      releaseDate: film.releaseDate,
-                      posterUrl: film.posterUrl,
-                      mediaType: 'movie' // defaults to movie for listing card
-                    }}
-                    userFavourites={[]}
-                  />
-                ))}
+                {filmography
+                  .filter(film => film.title && film.title.toLowerCase().includes(searchQuery.toLowerCase()))
+                  .map((film) => (
+                    <MovieCard 
+                      key={film.movieId}
+                      movie={{
+                        _id: film.movieId,
+                        refId: film.movieId.toString().replace(/^tmdb-/, ''),
+                        source: film.source || (film.movieId.toString().startsWith('tmdb-') ? 'tmdb' : 'local'),
+                        title: film.title,
+                        releaseDate: film.releaseDate,
+                        posterUrl: film.posterUrl,
+                        mediaType: 'movie'
+                      }}
+                      userFavourites={[]}
+                    />
+                  ))}
               </div>
             )}
           </section>
@@ -378,6 +399,38 @@ const CastDetail = () => {
           border-radius: var(--border-radius);
           color: var(--text-secondary);
           font-size: 0.875rem;
+        }
+        .search-input-wrapper {
+          position: relative;
+          display: flex;
+          align-items: center;
+          width: 280px;
+        }
+        .search-icon {
+          position: absolute;
+          left: 0.75rem;
+          color: var(--text-muted);
+          pointer-events: none;
+        }
+        .search-input {
+          width: 100%;
+          padding: 0.5rem 1rem 0.5rem 2.25rem;
+          border-radius: var(--border-radius);
+          border: 1px solid var(--border-color);
+          background-color: var(--bg-secondary);
+          color: var(--text-primary);
+          font-size: 0.875rem;
+          transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .search-input:focus {
+          outline: none;
+          border-color: var(--color-primary);
+          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+        }
+        @media (max-width: 576px) {
+          .search-input-wrapper {
+            width: 100%;
+          }
         }
       `}</style>
     </div>

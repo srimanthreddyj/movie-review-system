@@ -93,21 +93,69 @@ exports.getCastById = async (req, res) => {
       }
     }
 
-    // Dynamic Filmography: find all movies where this castId is linked
-    const movies = await Movie.find({ 'cast.castId': castMember._id })
-      .select('title releaseDate posterUrl cast')
-      .sort({ releaseDate: -1 });
+    let filmography = [];
+    let fetchedFromTmdb = false;
 
-    const filmography = movies.map(movie => {
-      const castLink = movie.cast.find(c => c.castId.toString() === castMember._id.toString());
-      return {
-        movieId: movie._id,
-        title: movie.title,
-        releaseDate: movie.releaseDate,
-        posterUrl: movie.posterUrl,
-        characterName: castLink ? castLink.characterName : '',
-        role: castLink ? castLink.role : 'Actor'
-      };
+    if (castMember.tmdbId) {
+      try {
+        const movieApiService = require('../services/movieApiService');
+        const tmdbCredits = await movieApiService.getTmdbPersonMovieCredits(castMember.tmdbId, castMember.name);
+        
+        if (tmdbCredits && tmdbCredits.length > 0) {
+          const tmdbIds = tmdbCredits.map(c => c.tmdbId);
+          // Find all local movies with these tmdbIds
+          const localMovies = await Movie.find({ tmdbId: { $in: tmdbIds } })
+            .select('_id tmdbId title posterUrl releaseDate');
+            
+          const localMoviesMap = new Map();
+          localMovies.forEach(m => {
+            if (m.tmdbId) localMoviesMap.set(m.tmdbId.toString(), m);
+          });
+
+          filmography = tmdbCredits.map(credit => {
+            const localMovie = localMoviesMap.get(credit.tmdbId);
+            return {
+              movieId: localMovie ? localMovie._id.toString() : `tmdb-${credit.tmdbId}`,
+              title: localMovie ? localMovie.title : credit.title,
+              releaseDate: localMovie ? localMovie.releaseDate : credit.releaseDate,
+              posterUrl: localMovie ? localMovie.posterUrl : credit.posterUrl,
+              characterName: credit.characterName,
+              role: credit.role,
+              source: localMovie ? 'local' : 'tmdb'
+            };
+          });
+          fetchedFromTmdb = true;
+        }
+      } catch (err) {
+        console.warn(`Failed to fetch TMDB movie credits for cast ${castMember.name}:`, err.message);
+      }
+    }
+
+    if (!fetchedFromTmdb) {
+      // Dynamic Filmography fallback: find all movies where this castId is linked locally
+      const movies = await Movie.find({ 'cast.castId': castMember._id })
+        .select('title releaseDate posterUrl cast')
+        .sort({ releaseDate: -1 });
+
+      filmography = movies.map(movie => {
+        const castLink = movie.cast.find(c => c.castId.toString() === castMember._id.toString());
+        return {
+          movieId: movie._id.toString(),
+          title: movie.title,
+          releaseDate: movie.releaseDate,
+          posterUrl: movie.posterUrl,
+          characterName: castLink ? castLink.characterName : '',
+          role: castLink ? castLink.role : 'Actor',
+          source: 'local'
+        };
+      });
+    }
+
+    // Sort by release date descending
+    filmography.sort((a, b) => {
+      if (!a.releaseDate) return 1;
+      if (!b.releaseDate) return -1;
+      return new Date(b.releaseDate) - new Date(a.releaseDate);
     });
 
     res.json({
@@ -315,7 +363,49 @@ exports.previewExternalCast = async (req, res) => {
       return res.status(404).json({ message: 'External cast details not found' });
     }
 
-    res.json(details);
+    let filmography = [];
+    if (details.tmdbId) {
+      try {
+        const tmdbCredits = await movieApiService.getTmdbPersonMovieCredits(details.tmdbId, details.name);
+        if (tmdbCredits && tmdbCredits.length > 0) {
+          const tmdbIds = tmdbCredits.map(c => c.tmdbId);
+          const localMovies = await Movie.find({ tmdbId: { $in: tmdbIds } })
+            .select('_id tmdbId title posterUrl releaseDate');
+            
+          const localMoviesMap = new Map();
+          localMovies.forEach(m => {
+            if (m.tmdbId) localMoviesMap.set(m.tmdbId.toString(), m);
+          });
+
+          filmography = tmdbCredits.map(credit => {
+            const localMovie = localMoviesMap.get(credit.tmdbId);
+            return {
+              movieId: localMovie ? localMovie._id.toString() : `tmdb-${credit.tmdbId}`,
+              title: localMovie ? localMovie.title : credit.title,
+              releaseDate: localMovie ? localMovie.releaseDate : credit.releaseDate,
+              posterUrl: localMovie ? localMovie.posterUrl : credit.posterUrl,
+              characterName: credit.characterName,
+              role: credit.role,
+              source: localMovie ? 'local' : 'tmdb'
+            };
+          });
+
+          // Sort by release date descending
+          filmography.sort((a, b) => {
+            if (!a.releaseDate) return 1;
+            if (!b.releaseDate) return -1;
+            return new Date(b.releaseDate) - new Date(a.releaseDate);
+          });
+        }
+      } catch (err) {
+        console.warn(`Failed to fetch TMDB movie credits for external preview cast ${details.name}:`, err.message);
+      }
+    }
+
+    res.json({
+      ...details,
+      filmography
+    });
   } catch (error) {
     res.status(500).json({ message: 'Previewing external cast failed', error: error.message });
   }
