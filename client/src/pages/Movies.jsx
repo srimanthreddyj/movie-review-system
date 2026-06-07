@@ -142,6 +142,7 @@ const Movies = () => {
     }
     setLoading(true);
     setImportError(null);
+    setShowDropdown(false);
     try {
       const response = await api.get('/movies/search', {
         params: { q: searchQuery }
@@ -172,10 +173,10 @@ const Movies = () => {
 
   // Perform local cascading filters on movies array
   const filteredMovies = movies.filter((movie) => {
-    const matchesSearch = searchQuery
-      ? movie.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (movie.originalTitle && movie.originalTitle.toLowerCase().includes(searchQuery.toLowerCase()))
-      : true;
+    const matchesSearch = (searchMode === 'tmdb' || !searchQuery)
+      ? true
+      : movie.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        (movie.originalTitle && movie.originalTitle.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesMedia = mediaTypeFilter ? movie.mediaType === mediaTypeFilter : true;
     const matchesStatus = statusFilter ? movie.status === statusFilter : true;
     const matchesLang = languageFilter ? movie.language === languageFilter : true;

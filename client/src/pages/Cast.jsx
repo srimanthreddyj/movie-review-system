@@ -124,6 +124,7 @@ const Cast = () => {
     }
     setLoading(true);
     setImportError(null);
+    setShowDropdown(false);
     try {
       const response = await api.get('/cast/search-external', {
         params: { q: searchQuery }
@@ -156,10 +157,10 @@ const Cast = () => {
   // Actresses (Female gender) are always pushed to the front in the sort order
   const filteredCast = castList
     .filter((member) => {
-      const matchesSearch = searchQuery
-        ? member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (member.nationality && member.nationality.toLowerCase().includes(searchQuery.toLowerCase()))
-        : true;
+      const matchesSearch = (searchMode === 'tmdb' || !searchQuery)
+        ? true
+        : member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (member.nationality && member.nationality.toLowerCase().includes(searchQuery.toLowerCase()));
       const matchesGender = genderFilter ? member.gender === genderFilter : true;
       const matchesRole = roleFilter ? member.knownFor === roleFilter : true;
       return matchesSearch && matchesGender && matchesRole;
