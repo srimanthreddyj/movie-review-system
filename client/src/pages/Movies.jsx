@@ -3,7 +3,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import api, { getProxiedImageUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import MovieCard from '../components/MovieCard';
-import { Search, SlidersHorizontal, Tag, RotateCcw, Loader2 } from 'lucide-react';
+import { Search, SlidersHorizontal, Tag, RotateCcw, Loader2, Film } from 'lucide-react';
 
 const Movies = () => {
   const navigate = useNavigate();
