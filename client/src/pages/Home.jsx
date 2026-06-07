@@ -70,42 +70,44 @@ const Home = () => {
       </header>
 
       {/* Stats Cards Row */}
-      <section className="stats-section">
-        <h2 className="section-title flex-center" style={{ justifyContent: 'flex-start', gap: '0.5rem' }}>
-          <Activity size={18} />
-          <span>Overview Stats</span>
-        </h2>
-        <div className="stats-grid">
-          <div className="stat-card flex-between">
-            <div>
-              <span className="stat-label">Tracked Movies</span>
-              <span className="stat-val">{stats.movies}</span>
+      {user?.role === 'admin' && (
+        <section className="stats-section">
+          <h2 className="section-title flex-center" style={{ justifyContent: 'flex-start', gap: '0.5rem' }}>
+            <Activity size={18} />
+            <span>Overview Stats</span>
+          </h2>
+          <div className="stats-grid">
+            <div className="stat-card flex-between">
+              <div>
+                <span className="stat-label">Tracked Movies</span>
+                <span className="stat-val">{stats.movies}</span>
+              </div>
+              <Film size={32} className="stat-icon" />
             </div>
-            <Film size={32} className="stat-icon" />
-          </div>
-          <div className="stat-card flex-between">
-            <div>
-              <span className="stat-label">Cast Profiles</span>
-              <span className="stat-val">{stats.cast}</span>
+            <div className="stat-card flex-between">
+              <div>
+                <span className="stat-label">Cast Profiles</span>
+                <span className="stat-val">{stats.cast}</span>
+              </div>
+              <Users size={32} className="stat-icon" />
             </div>
-            <Users size={32} className="stat-icon" />
-          </div>
-          <div className="stat-card flex-between">
-            <div>
-              <span className="stat-label">Favourites</span>
-              <span className="stat-val">{stats.favourites}</span>
+            <div className="stat-card flex-between">
+              <div>
+                <span className="stat-label">Favourites</span>
+                <span className="stat-val">{stats.favourites}</span>
+              </div>
+              <Heart size={32} className="stat-icon" />
             </div>
-            <Heart size={32} className="stat-icon" />
-          </div>
-          <div className="stat-card flex-between">
-            <div>
-              <span className="stat-label">Collections</span>
-              <span className="stat-val">{stats.collections}</span>
+            <div className="stat-card flex-between">
+              <div>
+                <span className="stat-label">Collections</span>
+                <span className="stat-val">{stats.collections}</span>
+              </div>
+              <FolderOpen size={32} className="stat-icon" />
             </div>
-            <FolderOpen size={32} className="stat-icon" />
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* Popular Movies Section */}
       <section className="dashboard-section" style={{ marginBottom: '2.5rem' }}>
