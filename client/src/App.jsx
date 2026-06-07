@@ -21,6 +21,12 @@ function ProtectedRoute({ children }) {
   return user ? children : <Navigate to="/login" replace />;
 }
 
+// Admin route component ensures only authenticated admin users can access certain pages
+function AdminRoute({ children }) {
+  const { user } = useAuth();
+  return user && user.role === 'admin' ? children : <Navigate to="/" replace />;
+}
+
 function App() {
   return (
     <AuthProvider>
@@ -101,9 +107,9 @@ function App() {
               <Route
                 path="/admin"
                 element={
-                  <ProtectedRoute>
+                  <AdminRoute>
                     <Admin />
-                  </ProtectedRoute>
+                  </AdminRoute>
                 }
               />
               {/* Catch‑all redirect */}

@@ -168,10 +168,12 @@ const Navbar = () => {
           <FolderOpen size={18} className="link-icon" />
           <span>Collections</span>
         </Link>
-        <Link to="/admin" className={linkClass('/admin')} onClick={() => setIsOpen(false)}>
-          <Shield size={18} className="link-icon" />
-          <span>Import Hub</span>
-        </Link>
+        {isAdmin && (
+          <Link to="/admin" className={linkClass('/admin')} onClick={() => setIsOpen(false)}>
+            <Shield size={18} className="link-icon" />
+            <span>Import Hub</span>
+          </Link>
+        )}
       </>
     );
   };
