@@ -89,7 +89,7 @@ const Movies = () => {
         const response = await api.get('/movies/search', {
           params: { q: searchQuery }
         });
-        setSuggestions(response.data || []);
+        setSuggestions(Array.isArray(response.data) ? response.data : []);
         setShowDropdown(true);
       } catch (err) {
         console.error('Movies page Autocomplete fetch failed:', err);
@@ -281,7 +281,7 @@ const Movies = () => {
 
           {showDropdown && suggestions.length > 0 && (
             <div className="search-suggestions-dropdown">
-              {suggestions.map((item, index) => (
+              {suggestions.map((item, index) => item && (
                 <div
                   key={index}
                   className="search-suggestion-item"
@@ -289,17 +289,24 @@ const Movies = () => {
                 >
                   <div className="suggestion-item-main">
                     {item.posterUrl ? (
-                      <img src={getProxiedImageUrl(item.posterUrl)} alt={item.title} className="suggestion-item-img" />
+                      <img src={getProxiedImageUrl(item.posterUrl)} alt={item.title || ''} className="suggestion-item-img" />
                     ) : (
                       <div className="suggestion-item-img-fallback flex-center">
                         <Film size={16} />
                       </div>
                     )}
                     <div className="suggestion-item-meta">
-                      <span className="suggestion-item-title">{item.title}</span>
+                      <span className="suggestion-item-title">{item.title || 'Untitled'}</span>
                       {item.releaseDate && (
                         <span className="suggestion-item-year">
-                          {new Date(item.releaseDate).getFullYear()}
+                          {(() => {
+                            try {
+                              const d = new Date(item.releaseDate);
+                              return isNaN(d.getTime()) ? '' : d.getFullYear();
+                            } catch (e) {
+                              return '';
+                            }
+                          })()}
                         </span>
                       )}
                     </div>

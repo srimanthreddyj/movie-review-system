@@ -73,7 +73,7 @@ const Cast = () => {
         const response = await api.get('/cast/search-external', {
           params: { q: searchQuery }
         });
-        setSuggestions(response.data || []);
+        setSuggestions(Array.isArray(response.data) ? response.data : []);
         setShowDropdown(true);
       } catch (err) {
         console.error('Cast page Autocomplete fetch failed:', err);
@@ -275,25 +275,25 @@ const Cast = () => {
 
           {showDropdown && suggestions.length > 0 && (
             <div className="search-suggestions-dropdown">
-              {suggestions.map((item, index) => (
+              {suggestions.map((item, index) => item && (
                 <div
                   key={index}
                   className="search-suggestion-item"
                   onClick={() => handleSuggestionClick(item)}
                 >
                   <div className="suggestion-item-main">
-                    {item.photoUrl ? (
-                      <img src={getProxiedImageUrl(item.photoUrl)} alt={item.name} className="suggestion-item-img" style={{ borderRadius: '50%', aspectRatio: '1/1', objectFit: 'cover' }} />
+                    {item.photoUrl || item.posterUrl ? (
+                      <img src={getProxiedImageUrl(item.photoUrl || item.posterUrl)} alt={item.name || item.title || ''} className="suggestion-item-img" style={{ borderRadius: '50%', aspectRatio: '1/1', objectFit: 'cover' }} />
                     ) : (
                       <div className="suggestion-item-img-fallback flex-center" style={{ borderRadius: '50%' }}>
                         <User size={16} />
                       </div>
                     )}
                     <div className="suggestion-item-meta">
-                      <span className="suggestion-item-title">{item.name}</span>
-                      {item.knownForDepartment && (
+                      <span className="suggestion-item-title">{item.name || item.title || 'Unknown'}</span>
+                      {(item.knownForDepartment || item.knownFor) && (
                         <span className="suggestion-item-year">
-                          {item.knownForDepartment}
+                          {item.knownForDepartment || item.knownFor}
                         </span>
                       )}
                     </div>
