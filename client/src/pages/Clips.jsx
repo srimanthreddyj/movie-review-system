@@ -19,6 +19,8 @@ const Clips = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [formError, setFormError] = useState('');
   const [formLoading, setFormLoading] = useState(false);
+  const [editingClipId, setEditingClipId] = useState(null);
+  const [userFavs, setUserFavs] = useState([]);
 
   // Form Fields
   const [formData, setFormData] = useState({
@@ -149,13 +151,74 @@ const Clips = () => {
   const fetchClipsData = async () => {
     setLoading(true);
     try {
-      const response = await api.get('/clips');
-      setClips(Array.isArray(response.data) ? response.data : []);
+      const [clipsRes, favsRes] = await Promise.all([
+        api.get('/clips'),
+        api.get('/favourites')
+      ]);
+      setClips(Array.isArray(clipsRes.data) ? clipsRes.data : []);
+      setUserFavs(favsRes.data.clips || []);
     } catch (err) {
-      console.error('Failed to fetch clips:', err);
+      console.error('Failed to fetch clips and favourites:', err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleRefreshFavourites = async () => {
+    try {
+      const favsRes = await api.get('/favourites');
+      setUserFavs(favsRes.data.clips || []);
+    } catch (err) {
+      console.error('Failed to refresh favourites:', err);
+    }
+  };
+
+  const handleEditClick = (clip) => {
+    setEditingClipId(clip._id);
+    
+    // Set form fields safely
+    setFormData({
+      title: clip.title || '',
+      url: clip.url || '',
+      description: clip.description || '',
+      clipType: clip.clipType || 'trailer',
+      movieId: clip.movieId && typeof clip.movieId === 'object' ? clip.movieId._id : (clip.movieId || ''),
+      castInvolved: clip.castInvolved ? clip.castInvolved.map(c => typeof c === 'object' ? c._id : c) : []
+    });
+
+    // Populate selected movie safely
+    if (clip.movieId && typeof clip.movieId === 'object') {
+      setSelectedMovie({
+        refId: clip.movieId._id,
+        title: clip.movieId.title,
+        posterUrl: clip.movieId.posterUrl,
+        mediaType: clip.movieId.mediaType,
+        source: 'local'
+      });
+    } else {
+      setSelectedMovie(null);
+    }
+
+    // Populate selected cast safely
+    if (clip.castInvolved && Array.isArray(clip.castInvolved)) {
+      setSelectedCast(
+        clip.castInvolved.map(c => typeof c === 'object' ? {
+          refId: c._id,
+          _id: c._id,
+          name: c.name,
+          photoUrl: c.photoUrl,
+          gender: c.gender,
+          source: 'local'
+        } : { _id: c, refId: c, name: 'Unknown Cast', source: 'local' })
+      );
+    } else {
+      setSelectedCast([]);
+    }
+
+    setMovieSearchQuery('');
+    setCastSearchQuery('');
+    setFormError('');
+    setShowAddModal(true);
   };
 
   const fetchMoviesAndCast = async () => {
@@ -262,8 +325,15 @@ const Clips = () => {
         castInvolved: resolvedCastIds
       };
 
-      const response = await api.post('/clips', finalFormData);
-      setClips((prev) => [response.data, ...prev]);
+      let response;
+      if (editingClipId) {
+        response = await api.put(`/clips/${editingClipId}`, finalFormData);
+        setClips((prev) => prev.map((c) => c._id === editingClipId ? response.data : c));
+      } else {
+        response = await api.post('/clips', finalFormData);
+        setClips((prev) => [response.data, ...prev]);
+      }
+
       setShowAddModal(false);
       // Reset form
       setFormData({
@@ -280,8 +350,9 @@ const Clips = () => {
       setSelectedCast([]);
       setCastSearchQuery('');
       setCastSearchResults([]);
+      setEditingClipId(null);
     } catch (err) {
-      setFormError(err.message || err.response?.data?.message || 'Failed to add clip. Ensure URL is valid.');
+      setFormError(err.message || err.response?.data?.message || 'Failed to save clip. Ensure URL is valid.');
     } finally {
       setFormLoading(false);
     }
@@ -304,11 +375,20 @@ const Clips = () => {
         </div>
         <div className="flex-center" style={{ gap: '0.5rem' }}>
           <button onClick={() => {
+            setEditingClipId(null);
             setSelectedMovie(null);
             setSelectedCast([]);
             setMovieSearchQuery('');
             setCastSearchQuery('');
             setFormError('');
+            setFormData({
+              title: '',
+              url: '',
+              description: '',
+              clipType: 'trailer',
+              movieId: '',
+              castInvolved: []
+            });
             setShowAddModal(true);
           }} className="btn btn-primary flex-center" style={{ gap: '0.375rem' }}>
             <Plus size={16} />
@@ -373,7 +453,9 @@ const Clips = () => {
               key={clip._id} 
               clip={clip} 
               onDelete={handleDeleteClip}
-              onEdit={null} // Simplified editing
+              onEdit={handleEditClick}
+              userFavourites={userFavs}
+              onFavouriteUpdate={handleRefreshFavourites}
               currentUserId={user?._id}
               isAdmin={isAdmin}
             />
@@ -386,8 +468,8 @@ const Clips = () => {
         <div className="modal-backdrop flex-center" onClick={() => setShowAddModal(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header flex-between">
-              <span className="modal-title">Add Video Clip Link</span>
-              <button onClick={() => setShowAddModal(false)} className="modal-close-btn flex-center">
+              <span className="modal-title">{editingClipId ? 'Edit Video Clip Link' : 'Add Video Clip Link'}</span>
+              <button onClick={() => { setShowAddModal(false); setEditingClipId(null); }} className="modal-close-btn flex-center">
                 <X size={20} />
               </button>
             </div>
@@ -634,7 +716,7 @@ const Clips = () => {
               </div>
 
               <button type="submit" disabled={formLoading} className="btn btn-primary" style={{ width: '100%', minHeight: '44px', marginTop: '1rem' }}>
-                {formLoading ? 'Saving video details...' : 'Add Clip'}
+                {formLoading ? 'Saving video details...' : (editingClipId ? 'Save Changes' : 'Add Clip')}
               </button>
             </form>
           </div>

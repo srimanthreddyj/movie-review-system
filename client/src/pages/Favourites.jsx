@@ -98,6 +98,8 @@ const Favourites = () => {
                 key={item._id} 
                 clip={item.details} 
                 onDelete={null} // View mode only on favourites tab
+                userFavourites={favourites.clips}
+                onFavouriteUpdate={fetchFavourites}
               />
             );
           }

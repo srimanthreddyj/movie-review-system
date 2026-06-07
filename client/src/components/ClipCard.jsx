@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
+import { Link } from 'react-router-dom';
 import { Play, Calendar, Tag, Trash2, Edit, FolderPlus } from 'lucide-react';
 import AddToCollectionModal from './AddToCollectionModal';
+import FavouriteButton from './FavouriteButton';
 
-const ClipCard = ({ clip, onDelete, onEdit, currentUserId, isAdmin }) => {
+const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpdate, currentUserId, isAdmin }) => {
   const { _id, title, url, description, clipType, addedBy, movieId, castInvolved = [], movieInfo, castInvolvedDetails } = clip;
   
   const displayMovie = movieInfo || (movieId && typeof movieId === 'object' ? movieId : null);
@@ -45,7 +47,7 @@ const ClipCard = ({ clip, onDelete, onEdit, currentUserId, isAdmin }) => {
         <h3 className="card-title" title={title}>{title}</h3>
         {displayMovie && (
           <p className="clip-movie-title">
-            From: <span>{displayMovie.title}</span>
+            From: <Link to={`/movies/${displayMovie._id}`} style={{ textDecoration: 'underline', color: 'var(--accent-color)', fontWeight: '500' }}>{displayMovie.title}</Link>
           </p>
         )}
 
@@ -55,24 +57,33 @@ const ClipCard = ({ clip, onDelete, onEdit, currentUserId, isAdmin }) => {
         {displayCast.length > 0 && (
           <div className="clip-cast-list">
             {displayCast.map((cast) => (
-              <span key={cast._id} className="clip-cast-pill">
+              <Link key={cast._id} to={`/cast/${cast._id}`} className="clip-cast-pill" style={{ display: 'inline-block', textDecoration: 'none' }}>
                 {cast.name}
-              </span>
+              </Link>
             ))}
           </div>
         )}
 
         {/* Clip Controls & Collection Save */}
-        <div className="clip-actions flex-between" style={{ marginTop: '1rem', paddingTop: '0.5rem', borderTop: '1px dashed var(--border-color)', gap: '0.5rem' }}>
-          <button 
-            onClick={() => setIsCollectionModalOpen(true)} 
-            className="btn btn-sm flex-center" 
-            title="Save to Collection"
-            style={{ padding: '0.25rem 0.5rem', minHeight: '32px' }}
-          >
-            <FolderPlus size={14} style={{ marginRight: '0.25rem' }} />
-            <span>Save</span>
-          </button>
+        <div className="clip-actions flex-between" style={{ marginTop: '1rem', paddingTop: '0.5rem', borderTop: '1px dashed var(--border-color)', gap: '0.5rem', alignItems: 'center' }}>
+          <div className="flex-center" style={{ gap: '0.5rem', justifyContent: 'flex-start' }}>
+            <button 
+              onClick={() => setIsCollectionModalOpen(true)} 
+              className="btn btn-sm flex-center" 
+              title="Save to Collection"
+              style={{ padding: '0.25rem 0.5rem', minHeight: '32px' }}
+            >
+              <FolderPlus size={14} style={{ marginRight: '0.25rem' }} />
+              <span>Save</span>
+            </button>
+
+            <FavouriteButton 
+              entityType="clips" 
+              entityId={_id} 
+              favouritesList={userFavourites} 
+              onUpdate={onFavouriteUpdate} 
+            />
+          </div>
 
           <div className="flex-center" style={{ gap: '0.5rem' }}>
             {canManage && onEdit && (
@@ -286,6 +297,28 @@ const ClipCard = ({ clip, onDelete, onEdit, currentUserId, isAdmin }) => {
           background-color: var(--bg-primary);
           color: var(--text-primary);
           padding: 1rem;
+        }
+
+        .clip-card .fav-btn {
+          min-height: 32px !important;
+          height: 32px !important;
+          font-size: 0.75rem !important;
+          padding: 0.25rem 0.5rem !important;
+        }
+        .clip-card .fav-active-btn-group {
+          border-radius: var(--border-radius);
+          overflow: hidden;
+        }
+        .clip-card .fav-active-btn-group .btn {
+          min-height: 32px !important;
+          height: 32px !important;
+          font-size: 0.75rem !important;
+        }
+        .clip-card .fav-dropdown-menu {
+          bottom: 100%;
+          top: auto;
+          margin-top: 0;
+          margin-bottom: 0.25rem;
         }
       `}</style>
     </div>
