@@ -8,7 +8,7 @@ const TagAssignment = require('../models/TagAssignment');
 exports.getClips = async (req, res) => {
   try {
     const { movieId, castId, clipType, tagId } = req.query;
-    const filter = {};
+    const filter = { addedBy: req.user.id }; // Scope to the logged-in user only
 
     if (movieId) {
       filter.movieId = movieId;
