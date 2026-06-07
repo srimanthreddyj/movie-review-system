@@ -18,6 +18,7 @@ const Cast = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [genderFilter, setGenderFilter] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
+  const [searchMode, setSearchMode] = useState('tmdb');
 
   useEffect(() => {
     if (!searchQuery) {
@@ -42,15 +43,25 @@ const Cast = () => {
     }
   };
 
+  const handleToggleSearchMode = (mode) => {
+    setSearchMode(mode);
+    setSearchQuery('');
+    fetchCastData();
+  };
+
   const handleResetFilters = () => {
     setSearchQuery('');
     setGenderFilter('');
     setRoleFilter('');
+    setSearchMode('tmdb');
     fetchCastData();
   };
 
   const handleSearch = async (e) => {
     if (e) e.preventDefault();
+    if (searchMode === 'local') {
+      return;
+    }
     if (!searchQuery.trim()) {
       fetchCastData();
       return;
@@ -141,18 +152,63 @@ const Cast = () => {
 
       {/* Filters Bar */}
       <section className="filters-section">
+        {/* Toggle between TMDB Live and Local Catalogue */}
+        <div className="search-mode-toggle flex-center" style={{ justifyContent: 'flex-start', marginBottom: '1.25rem', gap: '0.75rem', flexWrap: 'wrap' }}>
+          <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Search Target:</span>
+          <div className="toggle-group" style={{ display: 'inline-flex', borderRadius: '20px', border: '1px solid var(--border-color)', overflow: 'hidden', padding: '2px', backgroundColor: 'var(--bg-tertiary)' }}>
+            <button
+              type="button"
+              onClick={() => handleToggleSearchMode('tmdb')}
+              className={`toggle-btn ${searchMode === 'tmdb' ? 'active' : ''}`}
+              style={{
+                padding: '0.375rem 1rem',
+                fontSize: '0.75rem',
+                borderRadius: '18px',
+                border: 'none',
+                background: searchMode === 'tmdb' ? 'var(--accent-color)' : 'transparent',
+                color: searchMode === 'tmdb' ? 'white' : 'var(--text-secondary)',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              Live TMDB
+            </button>
+            <button
+              type="button"
+              onClick={() => handleToggleSearchMode('local')}
+              className={`toggle-btn ${searchMode === 'local' ? 'active' : ''}`}
+              style={{
+                padding: '0.375rem 1rem',
+                fontSize: '0.75rem',
+                borderRadius: '18px',
+                border: 'none',
+                background: searchMode === 'local' ? 'var(--accent-color)' : 'transparent',
+                color: searchMode === 'local' ? 'white' : 'var(--text-secondary)',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              Local Catalogue
+            </button>
+          </div>
+        </div>
+
         <form onSubmit={handleSearch} className="search-bar-container">
           <Search size={18} className="search-icon" />
           <input
             type="text"
             className="form-input search-input"
-            placeholder="Search TMDB & Catalog by name, nationality..."
+            placeholder={searchMode === 'tmdb' ? "Search TMDB & Catalog by name, nationality..." : "Filter local profiles by name, nationality..."}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
           />
-          <button type="submit" className="btn btn-primary search-submit-btn">
-            Search
-          </button>
+          {searchMode === 'tmdb' && (
+            <button type="submit" className="btn btn-primary search-submit-btn">
+              Search
+            </button>
+          )}
         </form>
 
         <div className="filters-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)' }}>
