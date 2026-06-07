@@ -186,7 +186,7 @@ const Navbar = () => {
         {/* Brand Logo */}
         <Link to="/" className="navbar-brand">
           <Film size={24} className="brand-logo-icon" />
-          <span className="brand-text">CineTrack</span>
+          <span className="brand-text">Movie Mapper</span>
         </Link>
 
         {/* Dual Search Input Boxes */}

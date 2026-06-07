@@ -65,7 +65,7 @@ const Home = () => {
           <span>Hello, {user.name}</span>
         </h1>
         <p className="welcome-subtext">
-          Welcome to CineTrack, your personal catalogue for tracking movies, TV shows, and cast members.
+          Welcome to Movie Mapper, your personal catalogue for tracking movies, TV shows, and cast members.
         </p>
       </header>
 

@@ -36,7 +36,7 @@ const Login = () => {
       <div className="auth-card">
         <div className="auth-header flex-center">
           <Film size={32} className="auth-logo-icon" />
-          <span className="auth-logo-text">CineTrack</span>
+          <span className="auth-logo-text">Movie Mapper</span>
         </div>
         <p className="auth-tagline">Track movies, shows, and actresses. Log your private notes.</p>
 

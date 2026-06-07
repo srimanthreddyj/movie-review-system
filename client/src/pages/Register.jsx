@@ -37,7 +37,7 @@ const Register = () => {
       <div className="auth-card">
         <div className="auth-header flex-center">
           <Film size={32} className="auth-logo-icon" />
-          <span className="auth-logo-text">CineTrack</span>
+          <span className="auth-logo-text">Movie Mapper</span>
         </div>
         <p className="auth-tagline">Create an account to begin tracking your movie catalog.</p>
 
