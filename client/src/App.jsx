@@ -27,6 +27,12 @@ function AdminRoute({ children }) {
   return user && user.role === 'admin' ? children : <Navigate to="/" replace />;
 }
 
+// Guest route component ensures authenticated users cannot access login/register pages
+function GuestRoute({ children }) {
+  const { user } = useAuth();
+  return user ? <Navigate to="/" replace /> : children;
+}
+
 function App() {
   return (
     <AuthProvider>
@@ -35,9 +41,23 @@ function App() {
           <Navbar />
           <main className="content-wrapper">
             <Routes>
-              {/* Public pages */}
-              <Route path="/login" element={<Login />} />
-              <Route path="/register" element={<Register />} />
+              {/* Public pages (only for guests) */}
+              <Route
+                path="/login"
+                element={
+                  <GuestRoute>
+                    <Login />
+                  </GuestRoute>
+                }
+              />
+              <Route
+                path="/register"
+                element={
+                  <GuestRoute>
+                    <Register />
+                  </GuestRoute>
+                }
+              />
 
               {/* Protected pages */}
               <Route
