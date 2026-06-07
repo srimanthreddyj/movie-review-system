@@ -2,8 +2,10 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { User, Globe } from 'lucide-react';
 import { getProxiedImageUrl } from '../services/api';
+import { useAuth } from '../context/AuthContext';
 
 const CastCard = ({ cast, userFavourites = [], characterName, onClick }) => {
+  const { user } = useAuth();
   const { _id, refId, name, photoUrl, knownFor, gender, nationality, source, tmdbId } = cast;
 
   const isFemale = gender === 'Female';
@@ -40,9 +42,11 @@ const CastCard = ({ cast, userFavourites = [], characterName, onClick }) => {
         )}
 
         {/* Source/Import Status Badge Overlay */}
-        <span className={`source-badge flex-center ${isExternal ? 'source-external' : 'source-local'}`}>
-          {isExternal ? `TMDB` : 'In Catalog'}
-        </span>
+        {user?.role === 'admin' && (
+          <span className={`source-badge flex-center ${isExternal ? 'source-external' : 'source-local'}`}>
+            {isExternal ? `TMDB` : 'In Catalog'}
+          </span>
+        )}
 
         {/* Favourites Priority Badge */}
         {favouriteItem && (

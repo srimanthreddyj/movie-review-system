@@ -232,10 +232,12 @@ const Navbar = () => {
                       <span className={`badge-outline-sm type-${item.mediaType === 'series' ? 'series' : 'movie'}`}>
                         {item.mediaType === 'series' ? 'show' : 'movie'}
                       </span>
-                      {item.source === 'local' ? (
-                        <span className="badge-success-sm">Saved</span>
-                      ) : (
-                        <span className="badge-secondary-sm">TMDB</span>
+                      {user?.role === 'admin' && (
+                        item.source === 'local' ? (
+                          <span className="badge-success-sm">Saved</span>
+                        ) : (
+                          <span className="badge-secondary-sm">TMDB</span>
+                        )
                       )}
                     </div>
                   </div>
@@ -287,10 +289,12 @@ const Navbar = () => {
                       <span className="badge-outline-sm type-person">
                         person
                       </span>
-                      {item.source === 'local' ? (
-                        <span className="badge-success-sm">Saved</span>
-                      ) : (
-                        <span className="badge-secondary-sm">TMDB</span>
+                      {user?.role === 'admin' && (
+                        item.source === 'local' ? (
+                          <span className="badge-success-sm">Saved</span>
+                        ) : (
+                          <span className="badge-secondary-sm">TMDB</span>
+                        )
                       )}
                     </div>
                   </div>
