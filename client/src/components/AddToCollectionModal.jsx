@@ -14,6 +14,7 @@ const AddToCollectionModal = ({ isOpen, onClose, entityType, entityId }) => {
   useEffect(() => {
     if (isOpen) {
       fetchCollections();
+      setDialogInfo(null); // Reset any stale dialog on open
     }
   }, [isOpen, entityId]);
 
@@ -88,11 +89,12 @@ const AddToCollectionModal = ({ isOpen, onClose, entityType, entityId }) => {
         })
       );
 
-      // Trigger custom success dialog box
+      // Trigger custom success dialog box — clicking OK will close the whole modal
       setDialogInfo({
         type: 'success',
         title: 'Saved to Collection',
-        message: `Successfully saved item to "${colName}".`
+        message: `Successfully saved item to "${colName}".`,
+        closeOnOk: true
       });
     } catch (err) {
       console.error('Failed to add to collection', err);
@@ -286,7 +288,10 @@ const AddToCollectionModal = ({ isOpen, onClose, entityType, entityId }) => {
             </div>
             <h3 className="dialog-title">{dialogInfo.title}</h3>
             <p className="dialog-message">{dialogInfo.message}</p>
-            <button className="btn btn-primary dialog-btn" onClick={() => setDialogInfo(null)}>
+            <button className="btn btn-primary dialog-btn" onClick={() => {
+              setDialogInfo(null);
+              if (dialogInfo?.closeOnOk) onClose();
+            }}>
               OK
             </button>
           </div>

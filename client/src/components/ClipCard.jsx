@@ -26,7 +26,9 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
     ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` 
     : 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&auto=format&fit=crop&q=60';
 
-  const canManage = addedBy === currentUserId || isAdmin;
+  // addedBy can be a populated object { _id, name } or a plain ID string
+  const addedById = addedBy?._id?.toString() || addedBy?.toString();
+  const canManage = addedById === currentUserId?.toString() || isAdmin;
 
   return (
     <div className="card clip-card">
@@ -136,12 +138,15 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
         document.body
       )}
 
-      <AddToCollectionModal 
-        isOpen={isCollectionModalOpen}
-        onClose={() => setIsCollectionModalOpen(false)}
-        entityType="clip"
-        entityId={_id}
-      />
+      {isCollectionModalOpen && createPortal(
+        <AddToCollectionModal 
+          isOpen={isCollectionModalOpen}
+          onClose={() => setIsCollectionModalOpen(false)}
+          entityType="clip"
+          entityId={_id}
+        />,
+        document.body
+      )}
 
       <style>{`
         .clip-card {
