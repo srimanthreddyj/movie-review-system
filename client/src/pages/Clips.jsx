@@ -486,6 +486,8 @@ const Clips = () => {
                         overflowY: 'auto',
                         backgroundColor: 'var(--bg-primary)',
                         position: 'absolute',
+                        top: '100%',
+                        left: 0,
                         width: '100%',
                         zIndex: 15,
                         boxShadow: 'var(--shadow-sm)'
@@ -798,6 +800,8 @@ const Clips = () => {
           overflow-y: auto;
           background-color: var(--bg-primary);
           position: absolute;
+          top: 100%;
+          left: 0;
           width: 100%;
           z-index: 10;
           box-shadow: var(--shadow-sm);

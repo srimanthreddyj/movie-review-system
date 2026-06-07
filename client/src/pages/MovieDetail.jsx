@@ -605,11 +605,16 @@ const MovieDetail = () => {
           margin-bottom: 1rem;
         }
         .banner-img-container {
-          height: 300px;
+          height: 380px;
           width: 100%;
           background-color: #000;
           overflow: hidden;
           position: relative;
+        }
+        @media (max-width: 768px) {
+          .banner-img-container {
+            height: 240px;
+          }
         }
         .banner-img-container::after {
           content: '';
@@ -624,6 +629,7 @@ const MovieDetail = () => {
           width: 100%;
           height: 100%;
           object-fit: cover;
+          object-position: center 30%;
           opacity: 0.65;
         }
         .banner-img-fallback {

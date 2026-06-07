@@ -323,7 +323,7 @@ const CastDetail = () => {
         .profile-photo-wrapper {
           position: relative;
           width: 100%;
-          aspect-ratio: 1;
+          aspect-ratio: 2/3;
           border-radius: var(--border-radius);
           border: 1px solid var(--border-color);
           overflow: hidden;
