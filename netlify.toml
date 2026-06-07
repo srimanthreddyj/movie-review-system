@@ -1,0 +1,8 @@
+[build]
+  # Build from repo root: change into client, install, then run Vite build
+  command = "cd client && npm ci && npm run build"
+  publish = "client/dist"
+
+[context.production.environment]
+# Replace the placeholder with your production backend URL, e.g. https://api.example.com/api
+VITE_API_URL = "https://your-backend.example.com/api"
