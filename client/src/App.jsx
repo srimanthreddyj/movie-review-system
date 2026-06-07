@@ -13,23 +13,37 @@ import Admin from './pages/Admin';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import { AuthProvider, useAuth } from './context/AuthContext';
+import { Loader2 } from 'lucide-react';
 import './index.css';
+
+// Loading Component
+function AuthLoadingScreen() {
+  return (
+    <div className="flex-center" style={{ height: '100vh', width: '100vw', flexDirection: 'column', gap: '1rem', backgroundColor: 'var(--bg-primary)', color: 'var(--text-secondary)' }}>
+      <Loader2 className="spinner" size={40} style={{ color: 'var(--accent-color)' }} />
+      <span>Restoring your session...</span>
+    </div>
+  );
+}
 
 // Protected route component ensures only authenticated users can access certain pages
 function ProtectedRoute({ children }) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  if (loading) return <AuthLoadingScreen />;
   return user ? children : <Navigate to="/login" replace />;
 }
 
 // Admin route component ensures only authenticated admin users can access certain pages
 function AdminRoute({ children }) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  if (loading) return <AuthLoadingScreen />;
   return user && user.role === 'admin' ? children : <Navigate to="/" replace />;
 }
 
 // Guest route component ensures authenticated users cannot access login/register pages
 function GuestRoute({ children }) {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
+  if (loading) return <AuthLoadingScreen />;
   return user ? <Navigate to="/" replace /> : children;
 }
 
