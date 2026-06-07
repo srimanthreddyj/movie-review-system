@@ -63,4 +63,9 @@ router.delete('/:id', auth, adminOnly, movieController.deleteMovie);
 // @access  Private
 router.post('/:id/explanation', auth, movieController.generateExplanation);
 
+// @route   POST /api/movies/heal-gemini
+// @desc    Heal mock Gemini movies by fetching real TMDB details
+// @access  Private (Admin only)
+router.post('/heal-gemini', auth, adminOnly, movieController.healGeminiMovies);
+
 module.exports = router;

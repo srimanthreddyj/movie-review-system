@@ -899,3 +899,116 @@ exports.getPopularMovies = async (req, res) => {
 };
 
 exports.refreshPopularCacheIfExpired = refreshPopularCacheIfExpired;
+
+// 12. Heal mock Gemini movies by searching TMDB and caching correct details
+exports.healGeminiMovies = async (req, res) => {
+  try {
+    const Movie = require('../models/Movie');
+    const Cast = require('../models/Cast');
+    const movieApiService = require('../services/movieApiService');
+
+    // Find all movies with mock gemini data or missing poster url
+    const moviesToHeal = await Movie.find({
+      $or: [
+        { dataSource: 'gemini' },
+        { tmdbId: /^gemini-/ },
+        { posterUrl: '' }
+      ]
+    });
+
+    console.log(`[Heal Service] Found ${moviesToHeal.length} movies to heal.`);
+    const healedList = [];
+    const failedList = [];
+
+    for (const movie of moviesToHeal) {
+      try {
+        console.log(`[Heal Service] Healing: "${movie.title}"`);
+        const searchResults = await movieApiService.searchMovies(movie.title);
+        const tmdbMatch = searchResults.find(r => r.source === 'tmdb');
+
+        if (!tmdbMatch) {
+          failedList.push({ id: movie._id, title: movie.title, reason: 'No TMDB match found' });
+          continue;
+        }
+
+        const details = await movieApiService.getMovieDetails(tmdbMatch.refId, 'tmdb', movie.title, movie.mediaType || 'movie');
+
+        const processedCast = [];
+        if (details.cast && Array.isArray(details.cast)) {
+          for (const actor of details.cast) {
+            if (!actor.name) continue;
+
+            const queryConditions = [{ name: actor.name }];
+            if (actor.tmdbId) queryConditions.push({ tmdbId: actor.tmdbId });
+            
+            let castDoc = await Cast.findOne({ $or: queryConditions });
+            if (!castDoc) {
+              castDoc = new Cast({
+                name: actor.name,
+                photoUrl: actor.photoUrl || '',
+                bio: actor.bio || '',
+                gender: actor.gender || 'Unspecified',
+                tmdbId: actor.tmdbId || '',
+                knownFor: actor.knownFor || 'Actor',
+                dataSource: 'tmdb'
+              });
+              await castDoc.save();
+            } else {
+              if (actor.tmdbId && !castDoc.tmdbId) {
+                castDoc.tmdbId = actor.tmdbId;
+                await castDoc.save();
+              }
+            }
+
+            processedCast.push({
+              castId: castDoc._id,
+              characterName: actor.characterName || '',
+              role: actor.role || 'Actor'
+            });
+          }
+        }
+
+        movie.tmdbId = details.tmdbId || movie.tmdbId;
+        movie.posterUrl = details.posterUrl || movie.posterUrl;
+        movie.bannerUrl = details.bannerUrl || movie.bannerUrl;
+        movie.synopsis = details.synopsis || movie.synopsis;
+        movie.originalTitle = details.originalTitle || movie.originalTitle;
+        movie.genre = details.genre || movie.genre;
+        movie.releaseDate = details.releaseDate || movie.releaseDate;
+        movie.rating = details.rating || movie.rating;
+        movie.imdbId = details.imdbId || movie.imdbId;
+        movie.dataSource = 'tmdb';
+        movie.cast = processedCast;
+
+        await movie.save();
+        healedList.push(movie.title);
+      } catch (err) {
+        failedList.push({ id: movie._id, title: movie.title, reason: err.message });
+      }
+    }
+
+    // Trigger popular sync cache refresh in the background
+    let syncSuccess = false;
+    try {
+      if (typeof refreshPopularCacheIfExpired === 'function') {
+        refreshPopularCacheIfExpired(true);
+        syncSuccess = true;
+      }
+    } catch (syncErr) {
+      console.error('[Heal Service] Failed to trigger popular cache sync:', syncErr.message);
+    }
+
+    res.json({
+      message: 'Heal operation completed',
+      healedCount: healedList.length,
+      healed: healedList,
+      failedCount: failedList.length,
+      failed: failedList,
+      popularSyncTriggered: syncSuccess
+    });
+
+  } catch (error) {
+    res.status(500).json({ message: 'Heal operation failed', error: error.message });
+  }
+};
+

@@ -31,6 +31,27 @@ const Admin = () => {
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewEntity, setPreviewEntity] = useState(null);
 
+  // Healing catalogue states
+  const [healing, setHealing] = useState(false);
+
+  const handleHealCatalogue = async () => {
+    setHealing(true);
+    setMessage('Syncing and repairing catalogue: searching TMDB and updating missing metadata...');
+    try {
+      const { data } = await api.post('/movies/heal-gemini');
+      setMessage(
+        `Heal complete! Successfully repaired ${data.healedCount} movies. Failed: ${data.failedCount}. ${
+          data.popularSyncTriggered ? 'Popular cache refresh initiated.' : ''
+        }`
+      );
+    } catch (err) {
+      console.error(err);
+      setMessage(err.response?.data?.message || 'Failed to sync & repair catalogue.');
+    } finally {
+      setHealing(false);
+    }
+  };
+
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
     setLoading(true);
@@ -163,7 +184,7 @@ const Admin = () => {
               Search for movies or shows. View previews or import them. Enable "Actresses Only" importing to filter out male/unspecified cast members on import.
             </p>
 
-            <div className="options-bar">
+            <div className="options-bar" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
               <label className="checkbox-label">
                 <input 
                   type="checkbox" 
@@ -173,6 +194,16 @@ const Admin = () => {
                 />
                 <span>Import Female Cast Members (Actresses Only)</span>
               </label>
+
+              <button
+                onClick={handleHealCatalogue}
+                disabled={healing || loading}
+                className="btn-accent flex-center"
+                style={{ gap: '0.5rem', minHeight: '38px', padding: '0 1rem', display: 'inline-flex', alignItems: 'center' }}
+              >
+                {healing ? <Loader2 className="animate-spin" size={16} /> : <Film size={16} />}
+                <span>Sync & Repair Catalogue</span>
+              </button>
             </div>
             
             <div className="search-box-row">
