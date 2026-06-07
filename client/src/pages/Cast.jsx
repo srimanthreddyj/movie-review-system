@@ -1,9 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import api from '../services/api';
+import api, { getProxiedImageUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import CastCard from '../components/CastCard';
-import { Search, RotateCcw, Loader2 } from 'lucide-react';
+import { Search, RotateCcw, Loader2, User } from 'lucide-react';
 
 const Cast = () => {
   const navigate = useNavigate();
@@ -20,10 +20,18 @@ const Cast = () => {
   const [roleFilter, setRoleFilter] = useState('');
   const [searchMode, setSearchMode] = useState('tmdb');
 
+  // Autocomplete suggestions state
+  const [suggestions, setSuggestions] = useState([]);
+  const [isSearchingSuggestions, setIsSearchingSuggestions] = useState(false);
+  const [showDropdown, setShowDropdown] = useState(false);
+
   useEffect(() => {
     if (!searchQuery) {
       fetchCastData();
     }
+  }, [searchQuery]);
+
+  useEffect(() => {
     refreshUser();
   }, []);
 
@@ -46,7 +54,53 @@ const Cast = () => {
   const handleToggleSearchMode = (mode) => {
     setSearchMode(mode);
     setSearchQuery('');
+    setSuggestions([]);
+    setShowDropdown(false);
     fetchCastData();
+  };
+
+  // Debounced search logic for autocomplete suggestions
+  useEffect(() => {
+    if (searchMode !== 'tmdb' || searchQuery.trim().length < 2) {
+      setSuggestions([]);
+      setShowDropdown(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      setIsSearchingSuggestions(true);
+      try {
+        const response = await api.get('/cast/search-external', {
+          params: { q: searchQuery }
+        });
+        setSuggestions(response.data || []);
+        setShowDropdown(true);
+      } catch (err) {
+        console.error('Cast page Autocomplete fetch failed:', err);
+      } finally {
+        setIsSearchingSuggestions(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [searchQuery, searchMode]);
+
+  // Click outside to close suggestion dropdown
+  useEffect(() => {
+    const handleOutsideClick = (e) => {
+      if (!e.target.closest('.search-bar-container')) {
+        setShowDropdown(false);
+      }
+    };
+    document.addEventListener('click', handleOutsideClick);
+    return () => document.removeEventListener('click', handleOutsideClick);
+  }, []);
+
+  const handleSuggestionClick = (item) => {
+    setSearchQuery('');
+    setSuggestions([]);
+    setShowDropdown(false);
+    handleCastClick(item);
   };
 
   const handleResetFilters = () => {
@@ -54,6 +108,8 @@ const Cast = () => {
     setGenderFilter('');
     setRoleFilter('');
     setSearchMode('tmdb');
+    setSuggestions([]);
+    setShowDropdown(false);
     fetchCastData();
   };
 
@@ -195,7 +251,7 @@ const Cast = () => {
           </div>
         </div>
 
-        <form onSubmit={handleSearch} className="search-bar-container">
+        <form onSubmit={handleSearch} className="search-bar-container" style={{ position: 'relative' }}>
           <Search size={18} className="search-icon" />
           <input
             type="text"
@@ -203,11 +259,57 @@ const Cast = () => {
             placeholder={searchMode === 'tmdb' ? "Search TMDB & Catalog by name, nationality..." : "Filter local profiles by name, nationality..."}
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
+            onFocus={() => { if (suggestions.length > 0) setShowDropdown(true); }}
           />
+          {isSearchingSuggestions && (
+            <div style={{ position: 'absolute', right: searchMode === 'tmdb' ? '110px' : '20px', top: '50%', transform: 'translateY(-50%)', zIndex: 5 }}>
+              <Loader2 size={16} className="spinner" style={{ color: 'var(--accent-color)' }} />
+            </div>
+          )}
           {searchMode === 'tmdb' && (
             <button type="submit" className="btn btn-primary search-submit-btn">
               Search
             </button>
+          )}
+
+          {showDropdown && suggestions.length > 0 && (
+            <div className="search-suggestions-dropdown">
+              {suggestions.map((item, index) => (
+                <div
+                  key={index}
+                  className="search-suggestion-item"
+                  onClick={() => handleSuggestionClick(item)}
+                >
+                  <div className="suggestion-item-main">
+                    {item.photoUrl ? (
+                      <img src={getProxiedImageUrl(item.photoUrl)} alt={item.name} className="suggestion-item-img" style={{ borderRadius: '50%', aspectRatio: '1/1', objectFit: 'cover' }} />
+                    ) : (
+                      <div className="suggestion-item-img-fallback flex-center" style={{ borderRadius: '50%' }}>
+                        <User size={16} />
+                      </div>
+                    )}
+                    <div className="suggestion-item-meta">
+                      <span className="suggestion-item-title">{item.name}</span>
+                      {item.knownForDepartment && (
+                        <span className="suggestion-item-year">
+                          {item.knownForDepartment}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="suggestion-item-tags">
+                    <span className="badge-outline-sm type-person">
+                      person
+                    </span>
+                    {item.source === 'local' ? (
+                      <span className="badge-success-sm">Saved</span>
+                    ) : (
+                      <span className="badge-secondary-sm">TMDB</span>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
           )}
         </form>
 
@@ -398,6 +500,115 @@ const Cast = () => {
           cursor: pointer;
           line-height: 1;
           padding: 0 0.5rem;
+        }
+
+        /* Suggestions Dropdown Styles */
+        .search-suggestions-dropdown {
+          position: absolute;
+          top: calc(100% + 0.25rem);
+          left: 0;
+          width: 100%;
+          max-height: 350px;
+          overflow-y: auto;
+          background-color: var(--bg-secondary);
+          border: 1px solid var(--border-color);
+          border-radius: var(--border-radius);
+          box-shadow: var(--shadow-lg);
+          z-index: 1000;
+          display: flex;
+          flex-direction: column;
+          padding: 0.5rem 0;
+        }
+        .search-suggestion-item {
+          padding: 0.75rem 1rem;
+          cursor: pointer;
+          transition: background-color var(--transition-speed);
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: 1rem;
+        }
+        .search-suggestion-item:hover {
+          background-color: var(--bg-tertiary);
+        }
+        .suggestion-item-main {
+          display: flex;
+          align-items: center;
+          gap: 0.75rem;
+          overflow: hidden;
+          flex-grow: 1;
+        }
+        .suggestion-item-img {
+          width: 44px;
+          height: 44px;
+          object-fit: cover;
+          border-radius: 50%;
+          border: 1px solid var(--border-color);
+          flex-shrink: 0;
+        }
+        .suggestion-item-img-fallback {
+          width: 44px;
+          height: 44px;
+          background-color: var(--bg-tertiary);
+          border-radius: 50%;
+          border: 1px solid var(--border-color);
+          color: var(--text-secondary);
+          flex-shrink: 0;
+        }
+        .suggestion-item-meta {
+          display: flex;
+          flex-direction: column;
+          align-items: flex-start;
+          justify-content: center;
+          overflow: hidden;
+        }
+        .suggestion-item-title {
+          font-size: 0.875rem;
+          font-weight: 600;
+          color: var(--text-primary);
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+          width: 100%;
+          text-align: left;
+        }
+        .suggestion-item-year {
+          font-size: 0.75rem;
+          color: var(--text-secondary);
+        }
+        .suggestion-item-tags {
+          display: flex;
+          align-items: center;
+          gap: 0.375rem;
+          flex-shrink: 0;
+        }
+        .badge-outline-sm {
+          font-size: 0.625rem;
+          padding: 0.1rem 0.35rem;
+          border-radius: 4px;
+          font-weight: 600;
+          text-transform: uppercase;
+        }
+        .badge-outline-sm.type-person {
+          border: 1px solid rgba(236, 72, 153, 0.3);
+          color: #ec4899;
+          background-color: rgba(236, 72, 153, 0.05);
+        }
+        .badge-success-sm {
+          font-size: 0.625rem;
+          background-color: rgba(16, 185, 129, 0.15);
+          color: #10b981;
+          padding: 0.1rem 0.35rem;
+          border-radius: 4px;
+          font-weight: 600;
+        }
+        .badge-secondary-sm {
+          font-size: 0.625rem;
+          background-color: var(--bg-tertiary);
+          color: var(--text-secondary);
+          padding: 0.1rem 0.35rem;
+          border-radius: 4px;
+          font-weight: 600;
         }
       `}</style>
     </div>
