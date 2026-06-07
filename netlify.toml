@@ -5,4 +5,4 @@
 
 [context.production.environment]
 # Replace the placeholder with your production backend URL, e.g. https://api.example.com/api
-VITE_API_URL = "https://movie-review-system-yhmo.onrender.com/"
+VITE_API_URL = "https://movie-review-system-yhmo.onrender.com/api"
