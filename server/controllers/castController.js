@@ -5,12 +5,22 @@ const TagAssignment = require('../models/TagAssignment');
 // 1. Get Cast members (search + tags + pagination)
 exports.getCasts = async (req, res) => {
   try {
-    const { page = 1, limit = 10, q, tagId } = req.query;
+    const { page = 1, limit = 10, q, tagId, gender, knownFor } = req.query;
     const query = {};
 
     // Filter by name search
     if (q) {
       query.name = { $regex: q, $options: 'i' };
+    }
+
+    // Filter by gender
+    if (gender) {
+      query.gender = gender;
+    }
+
+    // Filter by role/knownFor
+    if (knownFor) {
+      query.knownFor = knownFor;
     }
 
     // Filter by User-Scoped Tag Assignment

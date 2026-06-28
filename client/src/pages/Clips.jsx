@@ -15,6 +15,15 @@ const Clips = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalClips, setTotalClips] = useState(0);
+
+  // Cast Suggestions State
+  const [movieCastSuggestions, setMovieCastSuggestions] = useState([]);
+  const [loadingSuggestions, setLoadingSuggestions] = useState(false);
+
   // Form Modal State
   const [showAddModal, setShowAddModal] = useState(false);
   const [formError, setFormError] = useState('');
@@ -144,18 +153,27 @@ const Clips = () => {
   };
 
   useEffect(() => {
-    fetchClipsData();
     fetchMoviesAndCast();
   }, []);
 
-  const fetchClipsData = async () => {
+  const fetchClipsData = async (page = 1) => {
     setLoading(true);
     try {
+      const params = {
+        page,
+        limit: 12
+      };
+      if (typeFilter) params.clipType = typeFilter;
+      if (searchQuery) params.q = searchQuery;
+
       const [clipsRes, favsRes] = await Promise.all([
-        api.get('/clips'),
+        api.get('/clips', { params }),
         api.get('/favourites')
       ]);
-      setClips(Array.isArray(clipsRes.data) ? clipsRes.data : []);
+      setClips(clipsRes.data.clips || []);
+      setCurrentPage(clipsRes.data.page || 1);
+      setTotalPages(clipsRes.data.totalPages || 1);
+      setTotalClips(clipsRes.data.totalClips || 0);
       setUserFavs(favsRes.data.clips || []);
     } catch (err) {
       console.error('Failed to fetch clips and favourites:', err);
@@ -163,6 +181,69 @@ const Clips = () => {
       setLoading(false);
     }
   };
+
+  // Trigger loading when currentPage changes
+  useEffect(() => {
+    fetchClipsData(currentPage);
+  }, [currentPage]);
+
+  // When filters or search queries change, reset page to 1
+  useEffect(() => {
+    if (currentPage === 1) {
+      fetchClipsData(1);
+    } else {
+      setCurrentPage(1);
+    }
+  }, [searchQuery, typeFilter]);
+
+  // Fetch cast suggestions when selectedMovie changes
+  useEffect(() => {
+    const fetchMovieCastSuggestions = async () => {
+      if (!selectedMovie) {
+        setMovieCastSuggestions([]);
+        return;
+      }
+
+      setLoadingSuggestions(true);
+      try {
+        if (selectedMovie.source === 'local') {
+          const res = await api.get(`/movies/${selectedMovie.refId}`);
+          const castList = (res.data.cast || [])
+            .map(c => c.castId)
+            .filter(Boolean)
+            .map(c => ({
+              ...c,
+              source: 'local',
+              refId: c._id
+            }));
+          setMovieCastSuggestions(castList);
+        } else {
+          const res = await api.get('/movies/external-details-preview', {
+            params: {
+              refId: selectedMovie.refId,
+              source: selectedMovie.source,
+              mediaType: selectedMovie.mediaType || 'movie',
+              title: selectedMovie.title
+            }
+          });
+          const castList = (res.data.cast || []).map(c => ({
+            name: c.name,
+            photoUrl: c.photoUrl,
+            gender: c.gender || 'Unspecified',
+            tmdbId: c.tmdbId,
+            source: 'tmdb'
+          }));
+          setMovieCastSuggestions(castList);
+        }
+      } catch (err) {
+        console.error('Failed to fetch movie cast suggestions:', err);
+      } finally {
+        setLoadingSuggestions(false);
+      }
+    };
+
+    fetchMovieCastSuggestions();
+  }, [selectedMovie]);
 
   const handleRefreshFavourites = async () => {
     try {
@@ -237,13 +318,14 @@ const Clips = () => {
   const handleResetFilters = () => {
     setSearchQuery('');
     setTypeFilter('');
+    setCurrentPage(1);
   };
 
   const handleDeleteClip = async (id) => {
     if (!window.confirm('Are you sure you want to delete this clip?')) return;
     try {
       await api.delete(`/clips/${id}`);
-      setClips((prev) => prev.filter((c) => c._id !== id));
+      fetchClipsData(currentPage);
     } catch (err) {
       console.error('Failed to delete clip:', err);
       alert(err.response?.data?.message || 'Delete failed.');
@@ -325,13 +407,13 @@ const Clips = () => {
         castInvolved: resolvedCastIds
       };
 
-      let response;
       if (editingClipId) {
-        response = await api.put(`/clips/${editingClipId}`, finalFormData);
-        setClips((prev) => prev.map((c) => c._id === editingClipId ? response.data : c));
+        await api.put(`/clips/${editingClipId}`, finalFormData);
+        fetchClipsData(currentPage);
       } else {
-        response = await api.post('/clips', finalFormData);
-        setClips((prev) => [response.data, ...prev]);
+        await api.post('/clips', finalFormData);
+        setCurrentPage(1);
+        fetchClipsData(1);
       }
 
       setShowAddModal(false);
@@ -358,13 +440,7 @@ const Clips = () => {
     }
   };
 
-  // Perform cascading filters locally
-  const filteredClips = clips.filter((clip) => {
-    const matchesSearch = clip.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      (clip.description && clip.description.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesType = typeFilter ? clip.clipType === typeFilter : true;
-    return matchesSearch && matchesType;
-  });
+
 
   return (
     <div className="container clips-container">
@@ -438,7 +514,7 @@ const Clips = () => {
       {/* Grid Content */}
       {loading ? (
         <div className="catalogue-loading flex-center">Loading clips catalogue...</div>
-      ) : filteredClips.length === 0 ? (
+      ) : clips.length === 0 ? (
         <div className="catalogue-empty">
           <h3>No clips added</h3>
           <p>Be the first to add a trailer or behind-the-scenes video for your tracked items!</p>
@@ -448,7 +524,7 @@ const Clips = () => {
         </div>
       ) : (
         <div className="grid-cards">
-          {filteredClips.map((clip) => (
+          {clips.map((clip) => (
             <ClipCard 
               key={clip._id} 
               clip={clip} 
@@ -460,6 +536,52 @@ const Clips = () => {
               isAdmin={isAdmin}
             />
           ))}
+        </div>
+      )}
+
+      {/* Pagination Footer */}
+      {!loading && totalPages > 1 && (
+        <div className="pagination-container">
+          <button 
+            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+            className="pagination-btn"
+            title="Previous Page"
+          >
+            Prev
+          </button>
+          
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => {
+            const isNearStart = currentPage <= 4;
+            const isNearEnd = currentPage >= totalPages - 3;
+            const showPage = p === 1 || p === totalPages || Math.abs(currentPage - p) <= 1;
+
+            if (!showPage) {
+              if ((p === 2 && !isNearStart) || (p === totalPages - 1 && !isNearEnd)) {
+                return <span key={p} className="pagination-info">...</span>;
+              }
+              return null;
+            }
+
+            return (
+              <button
+                key={p}
+                onClick={() => setCurrentPage(p)}
+                className={`pagination-btn ${currentPage === p ? 'active' : ''}`}
+              >
+                {p}
+              </button>
+            );
+          })}
+
+          <button 
+            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            disabled={currentPage === totalPages}
+            className="pagination-btn"
+            title="Next Page"
+          >
+            Next
+          </button>
         </div>
       )}
 
@@ -645,6 +767,62 @@ const Clips = () => {
                         </button>
                       </span>
                     ))}
+                  </div>
+                )}
+
+                {/* Movie Cast Suggestions */}
+                {selectedMovie && (
+                  <div className="movie-cast-suggestions-container" style={{ marginBottom: '0.75rem' }}>
+                    <span style={{ fontSize: '0.75rem', fontWeight: '600', color: 'var(--text-secondary)', display: 'block', marginBottom: '0.375rem', textAlign: 'left' }}>
+                      Suggested Cast from "{selectedMovie.title}":
+                    </span>
+                    {loadingSuggestions ? (
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'left' }}>Loading cast suggestions...</div>
+                    ) : movieCastSuggestions.length === 0 ? (
+                      <div style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'left' }}>No cast recommendations found.</div>
+                    ) : (
+                      <div className="suggestions-flex" style={{ display: 'flex', flexWrap: 'wrap', gap: '0.375rem', maxHeight: '110px', overflowY: 'auto', padding: '0.375rem', border: '1px solid var(--border-color)', borderRadius: '4px', backgroundColor: 'var(--bg-tertiary)' }}>
+                        {movieCastSuggestions.map((actor, idx) => {
+                          const isAlreadySelected = selectedCast.some(c => 
+                            (c._id && actor._id && c._id === actor._id) || 
+                            (c.tmdbId && actor.tmdbId && c.tmdbId === actor.tmdbId)
+                          );
+                          
+                          return (
+                            <button
+                              key={actor.tmdbId || actor._id || idx}
+                              type="button"
+                              onClick={() => !isAlreadySelected && handleAddSelectedCast(actor)}
+                              className="suggestion-pill flex-center"
+                              disabled={isAlreadySelected}
+                              style={{
+                                display: 'inline-flex',
+                                alignItems: 'center',
+                                gap: '0.25rem',
+                                padding: '0.188rem 0.5rem',
+                                border: '1px solid var(--border-color)',
+                                borderRadius: '12px',
+                                backgroundColor: isAlreadySelected ? 'var(--bg-secondary)' : 'var(--bg-primary)',
+                                color: isAlreadySelected ? 'var(--text-muted)' : 'var(--text-primary)',
+                                cursor: isAlreadySelected ? 'not-allowed' : 'pointer',
+                                fontSize: '0.75rem',
+                                transition: 'all 0.15s ease'
+                              }}
+                            >
+                              {actor.photoUrl && (
+                                <img
+                                  src={getProxiedImageUrl(actor.photoUrl)}
+                                  alt={actor.name}
+                                  style={{ width: '14px', height: '14px', borderRadius: '50%', objectFit: 'cover' }}
+                                />
+                              )}
+                              <span>{actor.name}</span>
+                              {!isAlreadySelected && <span style={{ color: 'var(--accent-color)', fontWeight: 'bold', marginLeft: '2px' }}>+</span>}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
 

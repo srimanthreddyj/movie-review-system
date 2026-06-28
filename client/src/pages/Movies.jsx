@@ -20,6 +20,11 @@ const Movies = () => {
   const [languageFilter, setLanguageFilter] = useState('');
   const [tagFilter, setTagFilter] = useState('');
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalMovies, setTotalMovies] = useState(0);
+
   // Dropdown list data
   const [languages, setLanguages] = useState([]);
   const [userTags, setUserTags] = useState([]);
@@ -31,22 +36,28 @@ const Movies = () => {
   const [isSearchingSuggestions, setIsSearchingSuggestions] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
 
-  useEffect(() => {
-    if (!searchQuery) {
-      fetchCatalogData();
-    }
-  }, [searchQuery, tagFilter]);
-
-  const fetchCatalogData = async () => {
+  const fetchCatalogData = async (page = 1) => {
     setLoading(true);
     try {
-      const url = tagFilter ? `/movies?tagId=${tagFilter}` : '/movies';
-      const response = await api.get(url);
+      const params = {
+        page,
+        limit: 12
+      };
+      if (tagFilter) params.tagId = tagFilter;
+      if (mediaTypeFilter) params.mediaType = mediaTypeFilter;
+      if (statusFilter) params.status = statusFilter;
+      if (languageFilter) params.language = languageFilter;
+      if (searchMode === 'local' && searchQuery) params.q = searchQuery;
+
+      const response = await api.get('/movies', { params });
       setMovies(response.data.movies || []);
+      setCurrentPage(response.data.page || 1);
+      setTotalPages(response.data.totalPages || 1);
+      setTotalMovies(response.data.totalMovies || 0);
 
       // Extract unique languages present in movies for filtering
       const uniqueLangs = [...new Set((response.data.movies || []).map(m => m.language).filter(Boolean))];
-      setLanguages(uniqueLangs);
+      setLanguages(prev => [...new Set([...prev, ...uniqueLangs])]);
 
       // Load user preferences (favourites, tags)
       const [favsRes, tagsRes] = await Promise.all([
@@ -62,6 +73,24 @@ const Movies = () => {
     }
   };
 
+  // Trigger loading when currentPage changes
+  useEffect(() => {
+    if (searchMode === 'local' || !searchQuery) {
+      fetchCatalogData(currentPage);
+    }
+  }, [currentPage]);
+
+  // When filters or search queries change, reset page to 1
+  useEffect(() => {
+    if (currentPage === 1) {
+      if (searchMode === 'local' || !searchQuery) {
+        fetchCatalogData(1);
+      }
+    } else {
+      setCurrentPage(1);
+    }
+  }, [searchQuery, searchMode, tagFilter, mediaTypeFilter, statusFilter, languageFilter]);
+
   // Trigger refresh on mount to load fresh user data
   useEffect(() => {
     refreshUser();
@@ -72,7 +101,6 @@ const Movies = () => {
     setSearchQuery('');
     setSuggestions([]);
     setShowDropdown(false);
-    fetchCatalogData();
   };
 
   // Debounced search logic for autocomplete suggestions
@@ -128,16 +156,18 @@ const Movies = () => {
     setSearchMode('tmdb');
     setSuggestions([]);
     setShowDropdown(false);
-    fetchCatalogData();
+    setCurrentPage(1);
   };
 
   const handleSearch = async (e) => {
     if (e) e.preventDefault();
     if (searchMode === 'local') {
+      setCurrentPage(1);
+      fetchCatalogData(1);
       return;
     }
     if (!searchQuery.trim()) {
-      fetchCatalogData();
+      fetchCatalogData(1);
       return;
     }
     setLoading(true);
@@ -148,6 +178,8 @@ const Movies = () => {
         params: { q: searchQuery }
       });
       setMovies(response.data || []);
+      setTotalPages(1);
+      setCurrentPage(1);
     } catch (error) {
       console.error('Failed to search externally:', error);
       setImportError('Failed to execute search. Please try again.');
@@ -171,18 +203,16 @@ const Movies = () => {
     }
   };
 
-  // Perform local cascading filters on movies array
-  const filteredMovies = movies.filter((movie) => {
-    const matchesSearch = (searchMode === 'tmdb' || !searchQuery)
-      ? true
-      : movie.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (movie.originalTitle && movie.originalTitle.toLowerCase().includes(searchQuery.toLowerCase()));
-    const matchesMedia = mediaTypeFilter ? movie.mediaType === mediaTypeFilter : true;
-    const matchesStatus = statusFilter ? movie.status === statusFilter : true;
-    const matchesLang = languageFilter ? movie.language === languageFilter : true;
-    
-    return matchesSearch && matchesMedia && matchesStatus && matchesLang;
-  });
+  // When in local mode or empty query, filters are already processed server-side.
+  // When in live TMDB mode with search query, we filter TMDB results locally.
+  const filteredMovies = searchMode === 'tmdb' && searchQuery
+    ? movies.filter((movie) => {
+        const matchesMedia = mediaTypeFilter ? movie.mediaType === mediaTypeFilter : true;
+        const matchesStatus = statusFilter ? movie.status === statusFilter : true;
+        const matchesLang = languageFilter ? movie.language === languageFilter : true;
+        return matchesMedia && matchesStatus && matchesLang;
+      })
+    : movies;
 
   return (
     <div className="container catalogue-container">
@@ -420,6 +450,52 @@ const Movies = () => {
               onClick={handleMovieClick}
             />
           ))}
+        </div>
+      )}
+
+      {/* Pagination Footer */}
+      {!loading && totalPages > 1 && (
+        <div className="pagination-container">
+          <button 
+            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+            className="pagination-btn"
+            title="Previous Page"
+          >
+            Prev
+          </button>
+          
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => {
+            const isNearStart = currentPage <= 4;
+            const isNearEnd = currentPage >= totalPages - 3;
+            const showPage = p === 1 || p === totalPages || Math.abs(currentPage - p) <= 1;
+
+            if (!showPage) {
+              if ((p === 2 && !isNearStart) || (p === totalPages - 1 && !isNearEnd)) {
+                return <span key={p} className="pagination-info">...</span>;
+              }
+              return null;
+            }
+
+            return (
+              <button
+                key={p}
+                onClick={() => setCurrentPage(p)}
+                className={`pagination-btn ${currentPage === p ? 'active' : ''}`}
+              >
+                {p}
+              </button>
+            );
+          })}
+
+          <button 
+            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            disabled={currentPage === totalPages}
+            className="pagination-btn"
+            title="Next Page"
+          >
+            Next
+          </button>
         </div>
       )}
 

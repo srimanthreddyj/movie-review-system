@@ -31,6 +31,15 @@ const Collections = () => {
   const [colDesc, setColDesc] = useState('');
   const [colCover, setColCover] = useState('');
 
+  // Pagination States
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemPage, setItemPage] = useState(1);
+
+  // Reset item page when active collection or tab changes
+  useEffect(() => {
+    setItemPage(1);
+  }, [selectedCol?._id, activeTab]);
+
   useEffect(() => {
     fetchCollections();
   }, []);
@@ -41,6 +50,7 @@ const Collections = () => {
       setError('');
       const response = await api.get('/collections');
       setCollections(response.data);
+      setCurrentPage(1);
     } catch (err) {
       console.error('Failed to load collections:', err);
       setError('Could not load collections catalogue.');
@@ -287,42 +297,95 @@ const Collections = () => {
               <h3>No items saved in this category</h3>
               <p>Go to your tracked lists or search detail pages to add titles/actors to this collection!</p>
             </div>
-          ) : (
-            <div className="grid-cards">
-              {filteredItems.map((item) => (
-                <div key={item._id} className="collection-item-wrapper" style={{ position: 'relative' }}>
-                  {/* Floating Remove Button */}
-                  <button 
-                    onClick={() => handleRemoveItem(item.entityId)}
-                    className="col-item-remove-btn flex-center"
-                    title="Remove from Collection"
-                  >
-                    <X size={14} />
-                  </button>
+          ) : (() => {
+            const totalItemPages = Math.ceil(filteredItems.length / 12);
+            const paginatedItems = filteredItems.slice((itemPage - 1) * 12, itemPage * 12);
+            
+            return (
+              <>
+                <div className="grid-cards">
+                  {paginatedItems.map((item) => (
+                    <div key={item._id} className="collection-item-wrapper" style={{ position: 'relative' }}>
+                      {/* Floating Remove Button */}
+                      <button 
+                        onClick={() => handleRemoveItem(item.entityId)}
+                        className="col-item-remove-btn flex-center"
+                        title="Remove from Collection"
+                      >
+                        <X size={14} />
+                      </button>
 
-                  {/* Render Component */}
-                  {item.entityType === 'movie' && item.details && (
-                    <MovieCard movie={item.details} />
-                  )}
-                  {item.entityType === 'cast' && item.details && (
-                    <CastCard cast={item.details} />
-                  )}
-                  {item.entityType === 'clip' && item.details && (
-                    <ClipCard clip={item.details} />
-                  )}
+                      {/* Render Component */}
+                      {item.entityType === 'movie' && item.details && (
+                        <MovieCard movie={item.details} />
+                      )}
+                      {item.entityType === 'cast' && item.details && (
+                        <CastCard cast={item.details} />
+                      )}
+                      {item.entityType === 'clip' && item.details && (
+                        <ClipCard clip={item.details} />
+                      )}
 
-                  {/* Deleted item placeholder */}
-                  {!item.details && (
-                    <div className="card deleted-item-card flex-center">
-                      <AlertCircle size={28} style={{ color: 'var(--text-muted)', marginBottom: '0.5rem' }} />
-                      <span className="deleted-title">Item Deleted</span>
-                      <p>This item no longer exists in your catalog.</p>
+                      {/* Deleted item placeholder */}
+                      {!item.details && (
+                        <div className="card deleted-item-card flex-center">
+                          <AlertCircle size={28} style={{ color: 'var(--text-muted)', marginBottom: '0.5rem' }} />
+                          <span className="deleted-title">Item Deleted</span>
+                          <p>This item no longer exists in your catalog.</p>
+                        </div>
+                      )}
                     </div>
-                  )}
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
+
+                {/* Pagination Footer */}
+                {totalItemPages > 1 && (
+                  <div className="pagination-container" style={{ marginTop: '2rem' }}>
+                    <button 
+                      onClick={() => setItemPage(prev => Math.max(prev - 1, 1))}
+                      disabled={itemPage === 1}
+                      className="pagination-btn"
+                      title="Previous Page"
+                    >
+                      Prev
+                    </button>
+                    
+                    {Array.from({ length: totalItemPages }, (_, i) => i + 1).map((p) => {
+                      const isNearStart = itemPage <= 4;
+                      const isNearEnd = itemPage >= totalItemPages - 3;
+                      const showPage = p === 1 || p === totalItemPages || Math.abs(itemPage - p) <= 1;
+
+                      if (!showPage) {
+                        if ((p === 2 && !isNearStart) || (p === totalItemPages - 1 && !isNearEnd)) {
+                          return <span key={p} className="pagination-info">...</span>;
+                        }
+                        return null;
+                      }
+
+                      return (
+                        <button
+                          key={p}
+                          onClick={() => setItemPage(p)}
+                          className={`pagination-btn ${itemPage === p ? 'active' : ''}`}
+                        >
+                          {p}
+                        </button>
+                      );
+                    })}
+
+                    <button 
+                      onClick={() => setItemPage(prev => Math.min(prev + 1, totalItemPages))}
+                      disabled={itemPage === totalItemPages}
+                      className="pagination-btn"
+                      title="Next Page"
+                    >
+                      Next
+                    </button>
+                  </div>
+                )}
+              </>
+            );
+          })()}
         </div>
       ) : (
         /* MAIN LIST VIEW */
@@ -358,32 +421,85 @@ const Collections = () => {
                 <span>Create Collection</span>
               </button>
             </div>
-          ) : (
-            <div className="grid-cards">
-              {collections.map((col) => {
-                const count = col.items?.length || 0;
-                const coverStyle = col.coverImage 
-                  ? { backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.75)), url(${col.coverImage})` }
-                  : { background: 'linear-gradient(135deg, var(--bg-tertiary), var(--accent-light))' };
+          ) : (() => {
+            const totalPages = Math.ceil(collections.length / 12);
+            const paginatedCollections = collections.slice((currentPage - 1) * 12, currentPage * 12);
+            
+            return (
+              <>
+                <div className="grid-cards">
+                  {paginatedCollections.map((col) => {
+                    const count = col.items?.length || 0;
+                    const coverStyle = col.coverImage 
+                      ? { backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.75)), url(${col.coverImage})` }
+                      : { background: 'linear-gradient(135deg, var(--bg-tertiary), var(--accent-light))' };
 
-                return (
-                  <div 
-                    key={col._id} 
-                    className="card collection-card-preview"
-                    onClick={() => fetchCollectionDetail(col._id)}
-                  >
-                    <div className="col-preview-banner" style={coverStyle}>
-                      <span className="col-preview-badge">{count} items</span>
-                    </div>
-                    <div className="card-content">
-                      <h3 className="col-preview-name">{col.name}</h3>
-                      <p className="col-preview-desc">{col.description || 'No description provided.'}</p>
-                    </div>
+                    return (
+                      <div 
+                        key={col._id} 
+                        className="card collection-card-preview"
+                        onClick={() => fetchCollectionDetail(col._id)}
+                      >
+                        <div className="col-preview-banner" style={coverStyle}>
+                          <span className="col-preview-badge">{count} items</span>
+                        </div>
+                        <div className="card-content">
+                          <h3 className="col-preview-name">{col.name}</h3>
+                          <p className="col-preview-desc">{col.description || 'No description provided.'}</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Pagination Footer */}
+                {totalPages > 1 && (
+                  <div className="pagination-container">
+                    <button 
+                      onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                      disabled={currentPage === 1}
+                      className="pagination-btn"
+                      title="Previous Page"
+                    >
+                      Prev
+                    </button>
+                    
+                    {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => {
+                      const isNearStart = currentPage <= 4;
+                      const isNearEnd = currentPage >= totalPages - 3;
+                      const showPage = p === 1 || p === totalPages || Math.abs(currentPage - p) <= 1;
+
+                      if (!showPage) {
+                        if ((p === 2 && !isNearStart) || (p === totalPages - 1 && !isNearEnd)) {
+                          return <span key={p} className="pagination-info">...</span>;
+                        }
+                        return null;
+                      }
+
+                      return (
+                        <button
+                          key={p}
+                          onClick={() => setCurrentPage(p)}
+                          className={`pagination-btn ${currentPage === p ? 'active' : ''}`}
+                        >
+                          {p}
+                        </button>
+                      );
+                    })}
+
+                    <button 
+                      onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                      disabled={currentPage === totalPages}
+                      className="pagination-btn"
+                      title="Next Page"
+                    >
+                      Next
+                    </button>
                   </div>
-                );
-              })}
-            </div>
-          )}
+                )}
+              </>
+            );
+          })()}
         </div>
       )}
 

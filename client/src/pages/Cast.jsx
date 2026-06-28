@@ -20,29 +20,39 @@ const Cast = () => {
   const [roleFilter, setRoleFilter] = useState('');
   const [searchMode, setSearchMode] = useState('tmdb');
 
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalCasts, setTotalCasts] = useState(0);
+
   // Autocomplete suggestions state
   const [suggestions, setSuggestions] = useState([]);
   const [isSearchingSuggestions, setIsSearchingSuggestions] = useState(false);
   const [showDropdown, setShowDropdown] = useState(false);
 
   useEffect(() => {
-    if (!searchQuery) {
-      fetchCastData();
-    }
-  }, [searchQuery]);
-
-  useEffect(() => {
     refreshUser();
   }, []);
 
-  const fetchCastData = async () => {
+  const fetchCastData = async (page = 1) => {
     setLoading(true);
     try {
+      const params = {
+        page,
+        limit: 12
+      };
+      if (searchMode === 'local' && searchQuery) params.q = searchQuery;
+      if (genderFilter) params.gender = genderFilter;
+      if (roleFilter) params.knownFor = roleFilter;
+
       const [castRes, favsRes] = await Promise.all([
-        api.get('/cast'),
+        api.get('/cast', { params }),
         api.get('/favourites')
       ]);
       setCastList(castRes.data.casts || []);
+      setCurrentPage(castRes.data.page || 1);
+      setTotalPages(castRes.data.totalPages || 1);
+      setTotalCasts(castRes.data.totalCasts || 0);
       setUserFavs(favsRes.data.cast || []);
     } catch (err) {
       console.error('Failed to load cast data:', err);
@@ -51,12 +61,29 @@ const Cast = () => {
     }
   };
 
+  // Trigger loading when currentPage changes
+  useEffect(() => {
+    if (searchMode === 'local' || !searchQuery) {
+      fetchCastData(currentPage);
+    }
+  }, [currentPage]);
+
+  // When filters or search queries change, reset page to 1
+  useEffect(() => {
+    if (currentPage === 1) {
+      if (searchMode === 'local' || !searchQuery) {
+        fetchCastData(1);
+      }
+    } else {
+      setCurrentPage(1);
+    }
+  }, [searchQuery, searchMode, genderFilter, roleFilter]);
+
   const handleToggleSearchMode = (mode) => {
     setSearchMode(mode);
     setSearchQuery('');
     setSuggestions([]);
     setShowDropdown(false);
-    fetchCastData();
   };
 
   // Debounced search logic for autocomplete suggestions
@@ -110,16 +137,18 @@ const Cast = () => {
     setSearchMode('tmdb');
     setSuggestions([]);
     setShowDropdown(false);
-    fetchCastData();
+    setCurrentPage(1);
   };
 
   const handleSearch = async (e) => {
     if (e) e.preventDefault();
     if (searchMode === 'local') {
+      setCurrentPage(1);
+      fetchCastData(1);
       return;
     }
     if (!searchQuery.trim()) {
-      fetchCastData();
+      fetchCastData(1);
       return;
     }
     setLoading(true);
@@ -130,6 +159,8 @@ const Cast = () => {
         params: { q: searchQuery }
       });
       setCastList(response.data || []);
+      setTotalPages(1);
+      setCurrentPage(1);
     } catch (err) {
       console.error('External cast search failed:', err);
       setImportError('Failed to execute search. Please try again.');
@@ -153,29 +184,25 @@ const Cast = () => {
     }
   };
 
-  // Perform cascading filters locally
-  // Actresses (Female gender) are always pushed to the front in the sort order
-  const filteredCast = castList
-    .filter((member) => {
-      const matchesSearch = (searchMode === 'tmdb' || !searchQuery)
-        ? true
-        : member.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          (member.nationality && member.nationality.toLowerCase().includes(searchQuery.toLowerCase()));
-      const matchesGender = genderFilter ? member.gender === genderFilter : true;
-      const matchesRole = roleFilter ? member.knownFor === roleFilter : true;
-      return matchesSearch && matchesGender && matchesRole;
-    })
-    .sort((a, b) => {
-      // Priority sorting: Female actresses first, then by name
-      const aFemale = a.gender === 'Female' ? 1 : 0;
-      const bFemale = b.gender === 'Female' ? 1 : 0;
-      if (aFemale !== bFemale) {
-        return bFemale - aFemale; // Female first
-      }
-      return a.name.localeCompare(b.name);
-    });
+  // When in local mode or empty query, filters are already processed server-side.
+  // When in live TMDB mode with search query, we filter TMDB results locally.
+  const filteredCast = searchMode === 'tmdb' && searchQuery
+    ? castList.filter((member) => {
+        const matchesGender = genderFilter ? member.gender === genderFilter : true;
+        const matchesRole = roleFilter ? (member.knownFor === roleFilter || member.knownForDepartment === roleFilter) : true;
+        return matchesGender && matchesRole;
+      })
+    : castList;
 
-  // Extract unique roles/knownFor for filter list
+  const sortedCast = [...filteredCast].sort((a, b) => {
+    const aFemale = a.gender === 'Female' ? 1 : 0;
+    const bFemale = b.gender === 'Female' ? 1 : 0;
+    if (aFemale !== bFemale) {
+      return bFemale - aFemale;
+    }
+    return a.name.localeCompare(b.name);
+  });
+
   const roles = [...new Set(castList.map(c => c.knownFor || c.knownForDepartment).filter(Boolean))];
 
   return (
@@ -363,7 +390,7 @@ const Cast = () => {
         </div>
       ) : (
         <div className="grid-cards" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
-          {filteredCast.map((member) => (
+          {sortedCast.map((member) => (
             <CastCard 
               key={member.refId || member._id} 
               cast={member} 
@@ -371,6 +398,52 @@ const Cast = () => {
               onClick={handleCastClick}
             />
           ))}
+        </div>
+      )}
+
+      {/* Pagination Footer */}
+      {!loading && totalPages > 1 && (
+        <div className="pagination-container">
+          <button 
+            onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+            disabled={currentPage === 1}
+            className="pagination-btn"
+            title="Previous Page"
+          >
+            Prev
+          </button>
+          
+          {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => {
+            const isNearStart = currentPage <= 4;
+            const isNearEnd = currentPage >= totalPages - 3;
+            const showPage = p === 1 || p === totalPages || Math.abs(currentPage - p) <= 1;
+
+            if (!showPage) {
+              if ((p === 2 && !isNearStart) || (p === totalPages - 1 && !isNearEnd)) {
+                return <span key={p} className="pagination-info">...</span>;
+              }
+              return null;
+            }
+
+            return (
+              <button
+                key={p}
+                onClick={() => setCurrentPage(p)}
+                className={`pagination-btn ${currentPage === p ? 'active' : ''}`}
+              >
+                {p}
+              </button>
+            );
+          })}
+
+          <button 
+            onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+            disabled={currentPage === totalPages}
+            className="pagination-btn"
+            title="Next Page"
+          >
+            Next
+          </button>
         </div>
       )}
 

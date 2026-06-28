@@ -12,6 +12,12 @@ const Favourites = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('movies'); // 'movies', 'cast', 'clips'
   const [priorityFilter, setPriorityFilter] = useState(''); // '', 'High', 'Medium', 'Low'
+  const [currentPage, setCurrentPage] = useState(1);
+
+  // Reset page when tab or priority changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [activeTab, priorityFilter]);
 
   useEffect(() => {
     fetchFavourites();
@@ -66,10 +72,13 @@ const Favourites = () => {
       );
     }
 
+    const totalPages = Math.ceil(filteredItems.length / 12);
+    const paginatedItems = filteredItems.slice((currentPage - 1) * 12, currentPage * 12);
+
     // Grouping by priority for visual clean dividers
-    const highPriority = filteredItems.filter(i => i.level === 'High');
-    const mediumPriority = filteredItems.filter(i => i.level === 'Medium');
-    const lowPriority = filteredItems.filter(i => i.level === 'Low');
+    const highPriority = paginatedItems.filter(i => i.level === 'High');
+    const mediumPriority = paginatedItems.filter(i => i.level === 'Medium');
+    const lowPriority = paginatedItems.filter(i => i.level === 'Low');
 
     const renderGrid = (list) => (
       <div className="grid-cards" style={{ marginBottom: '2.5rem' }}>
@@ -142,7 +151,53 @@ const Favourites = () => {
             )}
           </>
         ) : (
-          renderGrid(filteredItems)
+          renderGrid(paginatedItems)
+        )}
+
+        {/* Pagination Footer */}
+        {totalPages > 1 && (
+          <div className="pagination-container" style={{ marginTop: '1rem' }}>
+            <button 
+              onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+              disabled={currentPage === 1}
+              className="pagination-btn"
+              title="Previous Page"
+            >
+              Prev
+            </button>
+            
+            {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => {
+              const isNearStart = currentPage <= 4;
+              const isNearEnd = currentPage >= totalPages - 3;
+              const showPage = p === 1 || p === totalPages || Math.abs(currentPage - p) <= 1;
+
+              if (!showPage) {
+                if ((p === 2 && !isNearStart) || (p === totalPages - 1 && !isNearEnd)) {
+                  return <span key={p} className="pagination-info">...</span>;
+                }
+                return null;
+              }
+
+              return (
+                <button
+                  key={p}
+                  onClick={() => setCurrentPage(p)}
+                  className={`pagination-btn ${currentPage === p ? 'active' : ''}`}
+                >
+                  {p}
+                </button>
+              );
+            })}
+
+            <button 
+              onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+              disabled={currentPage === totalPages}
+              className="pagination-btn"
+              title="Next Page"
+            >
+              Next
+            </button>
+          </div>
         )}
       </div>
     );

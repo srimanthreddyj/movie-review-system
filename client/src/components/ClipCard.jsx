@@ -21,10 +21,42 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
     return (match && match[2].length === 11) ? match[2] : null;
   };
 
+  // Extract Instagram shortcode from URL if applicable
+  const getInstagramShortcode = (videoUrl) => {
+    if (!videoUrl) return null;
+    const regExp = /instagram\.com\/(?:p|reel|tv)\/([a-zA-Z0-9_-]+)/;
+    const match = videoUrl.match(regExp);
+    return match ? match[1] : null;
+  };
+
+  // Extract Google Drive file ID from URL if applicable
+  const getGoogleDriveId = (videoUrl) => {
+    if (!videoUrl) return null;
+    const regExp1 = /drive\.google\.com\/file\/d\/([a-zA-Z0-9_-]+)/;
+    const regExp2 = /drive\.google\.com\/open\?id=([a-zA-Z0-9_-]+)/;
+    
+    const match1 = videoUrl.match(regExp1);
+    if (match1) return match1[1];
+    
+    const match2 = videoUrl.match(regExp2);
+    return match2 ? match2[1] : null;
+  };
+
   const videoId = getYouTubeId(url);
-  const thumbnailUrl = videoId 
-    ? `https://img.youtube.com/vi/${videoId}/hqdefault.jpg` 
-    : 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&auto=format&fit=crop&q=60';
+  const instagramShortcode = getInstagramShortcode(url);
+  const googleDriveId = getGoogleDriveId(url);
+
+  let thumbnailUrl = 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&auto=format&fit=crop&q=60';
+  let isInstagram = false;
+  let isGoogleDrive = false;
+
+  if (videoId) {
+    thumbnailUrl = `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`;
+  } else if (instagramShortcode) {
+    isInstagram = true;
+  } else if (googleDriveId) {
+    isGoogleDrive = true;
+  }
 
   // addedBy can be a populated object { _id, name } or a plain ID string
   const addedById = addedBy?._id?.toString() || addedBy?.toString();
@@ -33,7 +65,39 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
   return (
     <div className="card clip-card">
       <div className="card-img-container clip-thumbnail-container" onClick={() => setIsPlaying(true)}>
-        <img src={thumbnailUrl} alt={title} className="card-img clip-thumbnail" />
+        {isInstagram ? (
+          <div className="card-img clip-thumbnail instagram-thumbnail flex-center" style={{
+            width: '100%',
+            height: '100%',
+            background: 'radial-gradient(circle at 30% 107%, #fdf497 0%, #fdf497 5%, #fd5949 45%, #d6249f 60%, #285AEB 90%)',
+            color: '#ffffff',
+            flexDirection: 'column',
+            gap: '0.5rem',
+            position: 'absolute',
+            top: 0,
+            left: 0
+          }}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect width="20" height="20" x="2" y="2" rx="5" ry="5"/><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z"/><line x1="17.5" x2="17.51" y1="6.5" y2="6.5"/></svg>
+            <span style={{ fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Instagram Video</span>
+          </div>
+        ) : isGoogleDrive ? (
+          <div className="card-img clip-thumbnail gdrive-thumbnail flex-center" style={{
+            width: '100%',
+            height: '100%',
+            background: 'linear-gradient(135deg, #137333 0%, #1a73e8 50%, #f9ab00 100%)',
+            color: '#ffffff',
+            flexDirection: 'column',
+            gap: '0.5rem',
+            position: 'absolute',
+            top: 0,
+            left: 0
+          }}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.5 19A3.5 3.5 0 0 0 21 15.5c0-2.79-2.54-4.5-5-4.5-.42-1.89-1.74-3.5-4-3.5-3.04 0-5.5 2-5.5 5 0 .28.02.56.06.83A3.5 3.5 0 0 0 3 16.5c0 1.93 1.57 3.5 3.5 3.5Z"/></svg>
+            <span style={{ fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Google Drive Video</span>
+          </div>
+        ) : (
+          <img src={thumbnailUrl} alt={title} className="card-img clip-thumbnail" />
+        )}
         <div className="clip-play-overlay flex-center">
           <div className="play-icon-circle flex-center">
             <Play size={20} fill="#ffffff" stroke="none" />
@@ -41,7 +105,7 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
         </div>
         
         {clipType && (
-          <span className="clip-type-badge text-capitalize">{clipType}</span>
+          <span className="clip-type-badge text-capitalize" style={{ zIndex: 3 }}>{clipType}</span>
         )}
       </div>
 
@@ -105,7 +169,7 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
       {/* Video Modal Player Overlay (Portaled to body to prevent card transform/overflow clipping glitches) */}
       {isPlaying && createPortal(
         <div className="video-player-backdrop flex-center" onClick={() => setIsPlaying(false)}>
-          <div className="video-player-modal" onClick={(e) => e.stopPropagation()}>
+          <div className={`video-player-modal ${instagramShortcode ? 'instagram-modal' : ''}`} onClick={(e) => e.stopPropagation()}>
             <div className="video-modal-header flex-between">
               <span className="video-modal-title">{title}</span>
               <button onClick={() => setIsPlaying(false)} className="video-close-btn flex-center">
@@ -116,6 +180,24 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
               {videoId ? (
                 <iframe
                   src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
+                  title={title}
+                  frameBorder="0"
+                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                  allowFullScreen
+                  className="video-iframe"
+                />
+              ) : instagramShortcode ? (
+                <iframe
+                  src={`https://www.instagram.com/p/${instagramShortcode}/embed`}
+                  title={title}
+                  frameBorder="0"
+                  allowFullScreen
+                  className="video-iframe"
+                  style={{ border: 'none', overflow: 'hidden' }}
+                />
+              ) : googleDriveId ? (
+                <iframe
+                  src={`https://drive.google.com/file/d/${googleDriveId}/preview`}
                   title={title}
                   frameBorder="0"
                   allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
@@ -151,10 +233,28 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
       <style>{`
         .clip-card {
           height: 100%;
+          display: flex;
+          flex-direction: column;
+        }
+        .clip-card .card-content {
+          display: flex;
+          flex-direction: column;
+          flex-grow: 1;
         }
         .clip-thumbnail-container {
           cursor: pointer;
           position: relative;
+          aspect-ratio: 16/9;
+          overflow: hidden;
+        }
+        .clip-thumbnail {
+          width: 100%;
+          height: 100%;
+          object-fit: cover;
+          transition: transform var(--transition-speed);
+        }
+        .clip-thumbnail-container:hover .clip-thumbnail {
+          transform: scale(1.03);
         }
         .clip-play-overlay {
           position: absolute;
@@ -164,6 +264,7 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
           height: 100%;
           background-color: rgba(0, 0, 0, 0.3);
           transition: background-color var(--transition-speed);
+          z-index: 2;
         }
         .clip-thumbnail-container:hover .clip-play-overlay {
           background-color: rgba(0, 0, 0, 0.5);
@@ -192,6 +293,7 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
           font-size: 0.75rem;
           font-weight: 500;
           text-transform: uppercase;
+          z-index: 3;
         }
         .clip-movie-title {
           font-size: 0.813rem;
@@ -207,7 +309,7 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
           color: var(--text-secondary);
           margin-bottom: 1rem;
           display: -webkit-box;
-          -webkit-line-clamp: 2;
+          -webkit-line-clamp: 3;
           -webkit-box-orient: vertical;
           overflow: hidden;
           text-overflow: ellipsis;
@@ -229,9 +331,13 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
         .clip-actions {
           margin-top: 1rem;
           gap: 0.5rem;
-          justify-content: flex-end;
+          justify-content: flex-between;
           padding-top: 0.5rem;
           border-top: 1px dashed var(--border-color);
+          align-items: center;
+        }
+        .clip-card .card-content > .clip-actions:last-child {
+          margin-top: auto;
         }
         .btn-sm {
           min-height: 32px;
@@ -324,6 +430,35 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
           top: auto;
           margin-top: 0;
           margin-bottom: 0.25rem;
+        }
+        
+        /* Instagram Specific Styles */
+        .instagram-thumbnail {
+          display: flex !important;
+          align-items: center;
+          justify-content: center;
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+        }
+        .instagram-modal {
+          max-width: 440px !important;
+        }
+        .instagram-modal .video-iframe-wrapper {
+          padding-top: 125% !important;
+        }
+        /* Google Drive Specific Styles */
+        .gdrive-thumbnail {
+          display: flex !important;
+          align-items: center;
+          justify-content: center;
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
         }
       `}</style>
     </div>

@@ -4,10 +4,10 @@ const Cast = require('../models/Cast');
 const User = require('../models/User');
 const TagAssignment = require('../models/TagAssignment');
 
-// Get all clips with filtering
+// Get all clips with filtering and pagination
 exports.getClips = async (req, res) => {
   try {
-    const { movieId, castId, clipType, tagId } = req.query;
+    const { movieId, castId, clipType, tagId, page = 1, limit = 10, q } = req.query;
     const filter = { addedBy: req.user.id }; // Scope to the logged-in user only
 
     if (movieId) {
@@ -22,6 +22,13 @@ exports.getClips = async (req, res) => {
       filter.clipType = clipType;
     }
 
+    if (q) {
+      filter.$or = [
+        { title: { $regex: q, $options: 'i' } },
+        { description: { $regex: q, $options: 'i' } }
+      ];
+    }
+
     if (tagId) {
       const assignments = await TagAssignment.find({
         userId: req.user.id,
@@ -32,12 +39,26 @@ exports.getClips = async (req, res) => {
       filter._id = { $in: clipIds };
     }
 
+    const pageNum = parseInt(page);
+    const limitNum = parseInt(limit);
+    const skip = (pageNum - 1) * limitNum;
+
     const clips = await Clip.find(filter)
+      .skip(skip)
+      .limit(limitNum)
       .populate('movieId', 'title posterUrl mediaType')
       .populate('castInvolved', 'name photoUrl gender')
-      .populate('addedBy', 'name');
+      .populate('addedBy', 'name')
+      .sort({ createdAt: -1 });
 
-    res.json(clips);
+    const total = await Clip.countDocuments(filter);
+
+    res.json({
+      clips,
+      page: pageNum,
+      totalPages: Math.ceil(total / limitNum),
+      totalClips: total
+    });
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }

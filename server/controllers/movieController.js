@@ -300,7 +300,7 @@ exports.createMovie = async (req, res) => {
 // 4. Get Movies (Catalogue list with filters & pagination)
 exports.getMovies = async (req, res) => {
   try {
-    const { page = 1, limit = 10, genre, language, status, mediaType, tagId } = req.query;
+    const { page = 1, limit = 10, genre, language, status, mediaType, tagId, q } = req.query;
     const query = {};
 
     if (genre) {
@@ -314,6 +314,12 @@ exports.getMovies = async (req, res) => {
     }
     if (mediaType) {
       query.mediaType = mediaType;
+    }
+    if (q) {
+      query.$or = [
+        { title: { $regex: q, $options: 'i' } },
+        { originalTitle: { $regex: q, $options: 'i' } }
+      ];
     }
 
     if (tagId) {
