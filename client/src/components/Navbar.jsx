@@ -11,6 +11,7 @@ const Navbar = () => {
   const location = useLocation();
   const [theme, setTheme] = useState(localStorage.getItem('theme') || 'dark');
   const [isOpen, setIsOpen] = useState(false);
+  const [showMobileSearch, setShowMobileSearch] = useState(false);
 
   // Movie search states
   const [movieQuery, setMovieQuery] = useState('');
@@ -129,6 +130,12 @@ const Navbar = () => {
     document.documentElement.setAttribute('data-theme', theme);
     localStorage.setItem('theme', theme);
   }, [theme]);
+
+  // Close mobile search and menu drawer on navigation
+  useEffect(() => {
+    setShowMobileSearch(false);
+    setIsOpen(false);
+  }, [location]);
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
@@ -323,7 +330,10 @@ const Navbar = () => {
           </button>
           
           <div className="user-profile-widget flex-center">
-            <span className="user-profile-name">{user.name}</span>
+            <Link to="/profile" className="user-profile-link flex-center" style={{ gap: '0.375rem', color: 'inherit', textDecoration: 'none' }}>
+              <User size={16} className="user-profile-icon" />
+              <span className="user-profile-name">{user.name}</span>
+            </Link>
             <button 
               onClick={handleLogout} 
               className="navbar-action-btn logout-btn flex-center"
@@ -334,9 +344,25 @@ const Navbar = () => {
             </button>
           </div>
 
+          {/* Mobile Search Toggle Button */}
+          <button 
+            onClick={() => {
+              setShowMobileSearch(!showMobileSearch);
+              setIsOpen(false);
+            }} 
+            className="navbar-mobile-toggle mobile-search-btn flex-center"
+            title="Search Catalogue"
+            aria-label="Toggle Search"
+          >
+            {showMobileSearch ? <X size={20} /> : <Search size={20} />}
+          </button>
+
           {/* Mobile Menu Button */}
           <button 
-            onClick={() => setIsOpen(!isOpen)} 
+            onClick={() => {
+              setIsOpen(!isOpen);
+              setShowMobileSearch(false);
+            }} 
             className="navbar-mobile-toggle flex-center"
             aria-label="Toggle menu"
           >
@@ -344,6 +370,113 @@ const Navbar = () => {
           </button>
         </div>
       </div>
+
+      {/* Mobile Search Panel (Slides/shows below Navbar) */}
+      {showMobileSearch && (
+        <div className="navbar-mobile-search-panel animate-slide-down">
+          <div className="navbar-search-container mobile-search-active">
+            {/* Movies & Shows Search */}
+            <div className="navbar-search-wrapper movie-search-wrapper mobile-width">
+              <div className="navbar-search-field">
+                <Search size={16} className="search-field-icon" />
+                <input
+                  type="text"
+                  placeholder="Search movies & shows..."
+                  value={movieQuery}
+                  onChange={(e) => setMovieQuery(e.target.value)}
+                  onFocus={() => { if (movieSuggestions.length > 0) setShowMovieDropdown(true); }}
+                />
+                {isMovieLoading && <Loader2 size={14} className="search-field-spinner spinner" />}
+              </div>
+
+              {showMovieDropdown && movieSuggestions.length > 0 && (
+                <div className="navbar-suggestions-dropdown">
+                  {movieSuggestions.map((item, index) => (
+                    <div
+                       key={index}
+                       className="navbar-suggestion-item"
+                       onClick={() => handleMovieSuggestionClick(item)}
+                    >
+                      <div className="suggestion-item-main">
+                        {item.posterUrl ? (
+                          <img src={getProxiedImageUrl(item.posterUrl)} alt={item.title} className="suggestion-item-img" />
+                        ) : (
+                          <div className="suggestion-item-img-fallback flex-center">
+                            <Film size={14} />
+                          </div>
+                        )}
+                        <div className="suggestion-item-meta">
+                          <span className="suggestion-item-title">{item.title}</span>
+                          {item.releaseDate && (
+                            <span className="suggestion-item-year">
+                              {new Date(item.releaseDate).getFullYear()}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="suggestion-item-tags">
+                        <span className={`badge-outline-sm type-${item.mediaType === 'series' ? 'series' : 'movie'}`}>
+                          {item.mediaType === 'series' ? 'show' : 'movie'}
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Cast Members Search */}
+            <div className="navbar-search-wrapper cast-search-wrapper mobile-width">
+              <div className="navbar-search-field">
+                <Search size={16} className="search-field-icon" />
+                <input
+                  type="text"
+                  placeholder="Search cast members..."
+                  value={castQuery}
+                  onChange={(e) => setCastQuery(e.target.value)}
+                  onFocus={() => { if (castSuggestions.length > 0) setShowCastDropdown(true); }}
+                />
+                {isCastLoading && <Loader2 size={14} className="search-field-spinner spinner" />}
+              </div>
+
+              {showCastDropdown && castSuggestions.length > 0 && (
+                <div className="navbar-suggestions-dropdown">
+                  {castSuggestions.map((item, index) => (
+                    <div
+                       key={index}
+                       className="navbar-suggestion-item"
+                       onClick={() => handleCastSuggestionClick(item)}
+                    >
+                      <div className="suggestion-item-main">
+                        {item.photoUrl ? (
+                          <img src={getProxiedImageUrl(item.photoUrl)} alt={item.name} className="suggestion-item-img" />
+                        ) : (
+                          <div className="suggestion-item-img-fallback flex-center">
+                            <User size={14} />
+                          </div>
+                        )}
+                        <div className="suggestion-item-meta">
+                          <span className="suggestion-item-title">{item.name}</span>
+                          {item.knownFor && (
+                            <span className="suggestion-item-year" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '140px' }}>
+                              {item.knownFor}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="suggestion-item-tags">
+                        <span className="badge-outline-sm type-person">
+                          person
+                        </span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Mobile Sidebar/Drawer Menu */}
       {isOpen && (
@@ -358,8 +491,11 @@ const Navbar = () => {
             <div className="drawer-links">
               {renderLinks(true)}
             </div>
-            <div className="drawer-footer flex-between">
-              <span className="drawer-username">{user.name} ({user.role})</span>
+            <div className="drawer-footer flex-between" style={{ flexDirection: 'column', alignItems: 'stretch', gap: '0.75rem' }}>
+              <Link to="/profile" className="drawer-username flex-center" onClick={() => setIsOpen(false)} style={{ justifyContent: 'flex-start', gap: '0.5rem', textDecoration: 'none', color: 'inherit' }}>
+                <User size={16} />
+                <span>{user.name} ({user.role})</span>
+              </Link>
               <button onClick={handleLogout} className="btn btn-danger flex-center" style={{ gap: '0.5rem', width: '100%', minHeight: '44px' }}>
                 <LogOut size={16} />
                 <span>Logout</span>
@@ -715,6 +851,45 @@ const Navbar = () => {
           border-radius: 4px;
           font-weight: 600;
         }
+        
+        /* Mobile Search Panel Premium Styles */
+        .navbar-mobile-search-panel {
+          position: absolute;
+          top: 100%;
+          left: 0;
+          width: 100%;
+          background-color: var(--bg-secondary);
+          border-bottom: 1px solid var(--border-color);
+          padding: 0.85rem 1.25rem;
+          z-index: 99;
+          box-shadow: var(--shadow-md);
+        }
+        .mobile-search-active {
+          display: flex !important;
+          flex-direction: column;
+          gap: 0.75rem;
+          width: 100%;
+        }
+        .navbar-search-wrapper.mobile-width {
+          width: 100% !important;
+        }
+        .mobile-search-btn {
+          margin-right: 0.25rem;
+        }
+        @media (min-width: 1025px) {
+          .mobile-search-btn {
+            display: none !important;
+          }
+        }
+        .animate-slide-down {
+          animation: slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+          transform-origin: top center;
+        }
+        @keyframes slideDown {
+          from { transform: scaleY(0.9); opacity: 0; }
+          to { transform: scaleY(1); opacity: 1; }
+        }
+
       `}</style>
     </nav>
   );

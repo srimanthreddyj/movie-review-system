@@ -30,7 +30,6 @@ export const AuthProvider = ({ children }) => {
   }, []);
 
   const login = async (email, password) => {
-    setLoading(true);
     try {
       const response = await api.post('/auth/login', { email, password });
       const { token, user: userData } = response.data;
@@ -41,13 +40,10 @@ export const AuthProvider = ({ children }) => {
       console.error('Login request failed:', error);
       const message = error.response?.data?.message || 'Invalid email or password';
       return { success: false, error: message };
-    } finally {
-      setLoading(false);
     }
   };
 
   const register = async (name, email, password) => {
-    setLoading(true);
     try {
       const response = await api.post('/auth/register', { name, email, password });
       const { token, user: userData } = response.data;
@@ -58,8 +54,6 @@ export const AuthProvider = ({ children }) => {
       console.error('Registration request failed:', error);
       const message = error.response?.data?.message || 'Email already exists or invalid parameters';
       return { success: false, error: message };
-    } finally {
-      setLoading(false);
     }
   };
 

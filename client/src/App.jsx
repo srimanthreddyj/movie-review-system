@@ -12,6 +12,7 @@ import Collections from './pages/Collections';
 import Admin from './pages/Admin';
 import Login from './pages/Login';
 import Register from './pages/Register';
+import Profile from './pages/Profile';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import { Loader2 } from 'lucide-react';
 import './index.css';
@@ -135,6 +136,14 @@ function App() {
                 element={
                   <ProtectedRoute>
                     <Collections />
+                  </ProtectedRoute>
+                }
+              />
+              <Route
+                path="/profile"
+                element={
+                  <ProtectedRoute>
+                    <Profile />
                   </ProtectedRoute>
                 }
               />

@@ -424,8 +424,8 @@ const CastDetail = () => {
         }
         .search-input:focus {
           outline: none;
-          border-color: var(--color-primary);
-          box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+          border-color: var(--accent-color);
+          box-shadow: 0 0 0 3px var(--accent-light);
         }
         @media (max-width: 576px) {
           .search-input-wrapper {

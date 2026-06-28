@@ -560,20 +560,7 @@ const Clips = () => {
                     )}
                     
                     {showMovieDropdown && movieSearchResults.length > 0 && (
-                      <div className="movie-search-results-list" style={{
-                        border: '1px solid var(--border-color)',
-                        borderTop: 'none',
-                        borderRadius: `0 0 var(--border-radius) var(--border-radius)`,
-                        maxHeight: '180px',
-                        overflowY: 'auto',
-                        backgroundColor: 'var(--bg-primary)',
-                        position: 'absolute',
-                        top: '100%',
-                        left: 0,
-                        width: '100%',
-                        zIndex: 15,
-                        boxShadow: 'var(--shadow-sm)'
-                      }}>
+                      <div className="movie-search-results-list">
                         {movieSearchResults.map((m) => (
                           <div 
                             key={m.refId} 
@@ -874,7 +861,8 @@ const Clips = () => {
         .remove-cast-pill-btn:hover {
           color: #ef4444;
         }
-        .cast-search-results-list {
+        .cast-search-results-list,
+        .movie-search-results-list {
           border: 1px solid var(--border-color);
           border-top: none;
           border-radius: 0 0 var(--border-radius) var(--border-radius);
@@ -885,7 +873,7 @@ const Clips = () => {
           top: 100%;
           left: 0;
           width: 100%;
-          z-index: 10;
+          z-index: 15;
           box-shadow: var(--shadow-sm);
         }
         .cast-search-result-row {
