@@ -34,6 +34,9 @@ const Collections = () => {
   // Pagination States
   const [currentPage, setCurrentPage] = useState(1);
   const [itemPage, setItemPage] = useState(1);
+  
+  // Custom Confirmation Dialog State
+  const [itemToRemove, setItemToRemove] = useState(null);
 
   // Reset item page when active collection or tab changes
   useEffect(() => {
@@ -148,9 +151,12 @@ const Collections = () => {
     }
   };
 
-  const handleRemoveItem = async (entityId) => {
+  const handleRemoveItem = (entityId) => {
+    setItemToRemove(entityId);
+  };
+
+  const executeRemoveItem = async (entityId) => {
     if (!selectedCol) return;
-    if (!window.confirm('Are you sure you want to remove this item from the collection?')) return;
 
     try {
       setError('');
@@ -501,6 +507,41 @@ const Collections = () => {
               </>
             );
           })()}
+        </div>
+      )}
+
+      {/* CUSTOM CONFIRMATION POPUP FOR ITEM REMOVAL */}
+      {itemToRemove && (
+        <div className="dialog-backdrop flex-center" onClick={() => setItemToRemove(null)}>
+          <div className="dialog-box text-center animate-scale-in" onClick={(e) => e.stopPropagation()}>
+            <div className="dialog-icon-wrapper flex-center" style={{ backgroundColor: 'rgba(220, 38, 38, 0.12)' }}>
+              <X size={30} style={{ color: 'var(--error-color)' }} />
+            </div>
+            <h3 className="dialog-title">Remove Item?</h3>
+            <p className="dialog-message">
+              Are you sure you want to remove this item from the collection?
+            </p>
+            <div className="flex-center" style={{ gap: '0.75rem' }}>
+              <button 
+                className="btn btn-secondary" 
+                style={{ flex: 1, minHeight: '38px' }}
+                onClick={() => setItemToRemove(null)}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn btn-danger" 
+                style={{ flex: 1, minHeight: '38px' }}
+                onClick={() => {
+                  const id = itemToRemove;
+                  setItemToRemove(null);
+                  executeRemoveItem(id);
+                }}
+              >
+                Remove
+              </button>
+            </div>
+          </div>
         </div>
       )}
 

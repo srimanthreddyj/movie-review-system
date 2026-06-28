@@ -12,6 +12,7 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
   const displayCast = castInvolvedDetails || castInvolved || [];
   const [isPlaying, setIsPlaying] = useState(false);
   const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
 
   // Extract YouTube ID from URL if applicable
   const getYouTubeId = (videoUrl) => {
@@ -159,11 +160,7 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
             )}
             {canManage && onDelete && (
               <button 
-                onClick={() => {
-                  if (window.confirm('Are you sure you want to delete this video clip?')) {
-                    onDelete(_id);
-                  }
-                }} 
+                onClick={() => setShowDeleteConfirm(true)} 
                 className="btn btn-danger btn-sm" 
                 title="Delete Clip"
               >
@@ -237,7 +234,39 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
         />,
         document.body
       )}
-
+      {showDeleteConfirm && createPortal(
+        <div className="dialog-backdrop flex-center" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="dialog-box text-center animate-scale-in" onClick={(e) => e.stopPropagation()}>
+            <div className="dialog-icon-wrapper flex-center" style={{ backgroundColor: 'rgba(220, 38, 38, 0.12)' }}>
+              <Trash2 size={30} style={{ color: 'var(--error-color)' }} />
+            </div>
+            <h3 className="dialog-title">Delete Video Clip?</h3>
+            <p className="dialog-message">
+              Are you sure you want to delete this clip? This action cannot be undone.
+            </p>
+            <div className="flex-center" style={{ gap: '0.75rem' }}>
+              <button 
+                className="btn btn-secondary" 
+                style={{ flex: 1, minHeight: '38px' }}
+                onClick={() => setShowDeleteConfirm(false)}
+              >
+                Cancel
+              </button>
+              <button 
+                className="btn btn-danger" 
+                style={{ flex: 1, minHeight: '38px' }}
+                onClick={() => {
+                  setShowDeleteConfirm(false);
+                  onDelete(_id);
+                }}
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
       <style>{`
         .clip-card {
           height: 100%;
