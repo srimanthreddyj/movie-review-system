@@ -150,6 +150,7 @@ const Collections = () => {
 
   const handleRemoveItem = async (entityId) => {
     if (!selectedCol) return;
+    if (!window.confirm('Are you sure you want to remove this item from the collection?')) return;
 
     try {
       setError('');

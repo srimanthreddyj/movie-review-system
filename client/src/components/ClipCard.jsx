@@ -158,7 +158,15 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
               </button>
             )}
             {canManage && onDelete && (
-              <button onClick={() => onDelete(_id)} className="btn btn-danger btn-sm" title="Delete Clip">
+              <button 
+                onClick={() => {
+                  if (window.confirm('Are you sure you want to delete this video clip?')) {
+                    onDelete(_id);
+                  }
+                }} 
+                className="btn btn-danger btn-sm" 
+                title="Delete Clip"
+              >
                 <Trash2 size={14} />
               </button>
             )}

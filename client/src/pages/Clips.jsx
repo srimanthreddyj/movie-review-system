@@ -322,7 +322,6 @@ const Clips = () => {
   };
 
   const handleDeleteClip = async (id) => {
-    if (!window.confirm('Are you sure you want to delete this clip?')) return;
     try {
       await api.delete(`/clips/${id}`);
       fetchClipsData(currentPage);
