@@ -320,10 +320,47 @@ const MovieDetail = () => {
 
 
       {/* Back button */}
-      <Link to="/movies" className="back-link flex-center" style={{ justifyContent: 'flex-start', marginBottom: '1.5rem', gap: '0.25rem' }}>
-        <ArrowLeft size={14} />
-        <span>Back to Catalogue</span>
-      </Link>
+      {location.state?.fromCastDetail ? (
+        <Link 
+          to={`/cast/${location.state.fromCastDetail.castId}`} 
+          state={location.state}
+          className="back-link flex-center" 
+          style={{ justifyContent: 'flex-start', marginBottom: '1.5rem', gap: '0.25rem' }}
+        >
+          <ArrowLeft size={14} />
+          <span>Back to Cast profile</span>
+        </Link>
+      ) : location.state?.fromCollections ? (
+        <Link 
+          to="/collections" 
+          state={location.state}
+          className="back-link flex-center" 
+          style={{ justifyContent: 'flex-start', marginBottom: '1.5rem', gap: '0.25rem' }}
+        >
+          <ArrowLeft size={14} />
+          <span>Back to Collections</span>
+        </Link>
+      ) : location.state?.fromFavourites ? (
+        <Link 
+          to="/favourites" 
+          state={location.state}
+          className="back-link flex-center" 
+          style={{ justifyContent: 'flex-start', marginBottom: '1.5rem', gap: '0.25rem' }}
+        >
+          <ArrowLeft size={14} />
+          <span>Back to Favourites</span>
+        </Link>
+      ) : (
+        <Link 
+          to="/movies" 
+          state={location.state}
+          className="back-link flex-center" 
+          style={{ justifyContent: 'flex-start', marginBottom: '1.5rem', gap: '0.25rem' }}
+        >
+          <ArrowLeft size={14} />
+          <span>Back to Catalogue</span>
+        </Link>
+      )}
 
       {/* Banner / Poster Section */}
       <div className="detail-hero">

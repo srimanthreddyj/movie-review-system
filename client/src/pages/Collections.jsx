@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { 
   ArrowLeft, Trash2, FolderPlus, Plus, X, Film, User, 
   Video, Edit3, AlertCircle, Check, FolderOpen 
@@ -10,6 +11,10 @@ import ClipCard from '../components/ClipCard';
 import './Collections.css';
 
 const Collections = () => {
+  const location = useLocation();
+  const restoredState = location.state?.fromCollections;
+  const restoredRef = useRef(!!restoredState);
+
   const [collections, setCollections] = useState([]);
   const [selectedCol, setSelectedCol] = useState(null);
   
@@ -20,7 +25,7 @@ const Collections = () => {
   const [successMsg, setSuccessMsg] = useState('');
 
   // Tab State for Detail View
-  const [activeTab, setActiveTab] = useState('movie'); // 'movie' | 'cast' | 'clip'
+  const [activeTab, setActiveTab] = useState(restoredState?.activeTab || 'movie'); // 'movie' | 'cast' | 'clip'
 
   // Modal States
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -32,14 +37,17 @@ const Collections = () => {
   const [colCover, setColCover] = useState('');
 
   // Pagination States
-  const [currentPage, setCurrentPage] = useState(1);
-  const [itemPage, setItemPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(restoredState?.currentPage || 1);
+  const [itemPage, setItemPage] = useState(restoredState?.itemPage || 1);
   
   // Custom Confirmation Dialog State
   const [itemToRemove, setItemToRemove] = useState(null);
 
   // Reset item page when active collection or tab changes
   useEffect(() => {
+    if (restoredRef.current) {
+      return;
+    }
     setItemPage(1);
   }, [selectedCol?._id, activeTab]);
 
@@ -47,13 +55,35 @@ const Collections = () => {
     fetchCollections();
   }, []);
 
+  const [scrollRestored, setScrollRestored] = useState(false);
+
+  useEffect(() => {
+    if (!detailLoading && !loading && restoredState?.scrollY && !scrollRestored && selectedCol) {
+      setScrollRestored(true);
+      restoredRef.current = false;
+      setTimeout(() => {
+        window.scrollTo({
+          top: restoredState.scrollY,
+          behavior: 'instant'
+        });
+      }, 100);
+    }
+  }, [loading, detailLoading, restoredState, scrollRestored, selectedCol]);
+
   const fetchCollections = async () => {
     try {
       setLoading(true);
       setError('');
       const response = await api.get('/collections');
       setCollections(response.data);
-      setCurrentPage(1);
+      
+      if (restoredState?.selectedCollectionId) {
+        const matchedCol = response.data.find(c => c._id === restoredState.selectedCollectionId);
+        if (matchedCol) {
+          setSelectedCol(matchedCol);
+          fetchCollectionDetail(matchedCol._id);
+        }
+      }
     } catch (err) {
       console.error('Failed to load collections:', err);
       setError('Could not load collections catalogue.');
@@ -68,12 +98,14 @@ const Collections = () => {
       setError('');
       const response = await api.get(`/collections/${id}`);
       setSelectedCol(response.data);
-      // Automatically focus first tab that has items, or default to movie
-      const items = response.data.items || [];
-      if (items.some(i => i.entityType === 'movie')) setActiveTab('movie');
-      else if (items.some(i => i.entityType === 'cast')) setActiveTab('cast');
-      else if (items.some(i => i.entityType === 'clip')) setActiveTab('clip');
-      else setActiveTab('movie');
+      // Automatically focus first tab that has items, or default to movie, unless restoring
+      if (!restoredRef.current) {
+        const items = response.data.items || [];
+        if (items.some(i => i.entityType === 'movie')) setActiveTab('movie');
+        else if (items.some(i => i.entityType === 'cast')) setActiveTab('cast');
+        else if (items.some(i => i.entityType === 'clip')) setActiveTab('clip');
+        else setActiveTab('movie');
+      }
     } catch (err) {
       console.error('Failed to load collection details:', err);
       setError('Could not load collection details.');
@@ -308,6 +340,16 @@ const Collections = () => {
             const totalItemPages = Math.ceil(filteredItems.length / 12);
             const paginatedItems = filteredItems.slice((itemPage - 1) * 12, itemPage * 12);
             
+            const cardState = {
+              fromCollections: {
+                selectedCollectionId: selectedCol?._id,
+                activeTab,
+                currentPage,
+                itemPage,
+                scrollY: window.scrollY
+              }
+            };
+
             return (
               <>
                 <div className="grid-cards">
@@ -324,10 +366,10 @@ const Collections = () => {
 
                       {/* Render Component */}
                       {item.entityType === 'movie' && item.details && (
-                        <MovieCard movie={item.details} />
+                        <MovieCard movie={item.details} state={cardState} />
                       )}
                       {item.entityType === 'cast' && item.details && (
-                        <CastCard cast={item.details} />
+                        <CastCard cast={item.details} state={cardState} />
                       )}
                       {item.entityType === 'clip' && item.details && (
                         <ClipCard clip={item.details} />

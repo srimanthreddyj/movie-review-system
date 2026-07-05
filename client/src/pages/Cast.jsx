@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useRef } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import api, { getProxiedImageUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import CastCard from '../components/CastCard';
@@ -7,6 +7,10 @@ import { Search, RotateCcw, Loader2, User } from 'lucide-react';
 
 const Cast = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const restoredState = location.state?.fromPage;
+  const restoredRef = useRef(!!restoredState);
+
   const { user, refreshUser } = useAuth();
   const [castList, setCastList] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -15,13 +19,13 @@ const Cast = () => {
   const [importError, setImportError] = useState(null);
 
   // Search/Filters State
-  const [searchQuery, setSearchQuery] = useState('');
-  const [genderFilter, setGenderFilter] = useState('');
-  const [roleFilter, setRoleFilter] = useState('');
-  const [searchMode, setSearchMode] = useState('tmdb');
+  const [searchQuery, setSearchQuery] = useState(restoredState?.q || '');
+  const [genderFilter, setGenderFilter] = useState(restoredState?.gender || '');
+  const [roleFilter, setRoleFilter] = useState(restoredState?.role || '');
+  const [searchMode, setSearchMode] = useState(restoredState?.searchMode || 'tmdb');
 
   // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(restoredState?.page || 1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalCasts, setTotalCasts] = useState(0);
 
@@ -33,6 +37,20 @@ const Cast = () => {
   useEffect(() => {
     refreshUser();
   }, []);
+
+  const [scrollRestored, setScrollRestored] = useState(false);
+
+  useEffect(() => {
+    if (!loading && restoredState?.scrollY && !scrollRestored) {
+      setScrollRestored(true);
+      setTimeout(() => {
+        window.scrollTo({
+          top: restoredState.scrollY,
+          behavior: 'instant'
+        });
+      }, 100);
+    }
+  }, [loading, restoredState, scrollRestored]);
 
   const fetchCastData = async (page = 1) => {
     setLoading(true);
@@ -70,6 +88,16 @@ const Cast = () => {
 
   // When filters or search queries change, reset page to 1
   useEffect(() => {
+    if (restoredRef.current) {
+      restoredRef.current = false;
+      if (searchMode === 'local' || !searchQuery) {
+        fetchCastData(currentPage);
+      } else {
+        handleSearch();
+      }
+      return;
+    }
+
     if (currentPage === 1) {
       if (searchMode === 'local' || !searchQuery) {
         fetchCastData(1);
@@ -170,18 +198,37 @@ const Cast = () => {
   };
 
   const handleCastClick = async (member) => {
-    const isLocal = !member.source || member.source === 'local';
-    if (isLocal) {
-      const localId = member._id || member.refId;
-      if (localId && localId !== 'undefined') {
-        navigate(`/cast/${localId}`);
+    const state = {
+      fromPage: {
+        page: currentPage,
+        q: searchQuery,
+        gender: genderFilter,
+        role: roleFilter,
+        searchMode: searchMode,
+        scrollY: window.scrollY
       }
-      return;
-    }
-    const targetId = member.refId || member.tmdbId;
-    if (targetId && targetId !== 'undefined') {
-      navigate(`/cast/tmdb-${targetId}?source=${member.source || 'tmdb'}`);
-    }
+    };
+
+    // First replace the state of the current catalogue page in history before navigating away
+    navigate(location.pathname + location.search, {
+      replace: true,
+      state
+    });
+
+    const isLocal = !member.source || member.source === 'local';
+    setTimeout(() => {
+      if (isLocal) {
+        const localId = member._id || member.refId;
+        if (localId && localId !== 'undefined') {
+          navigate(`/cast/${localId}`, { state });
+        }
+      } else {
+        const targetId = member.refId || member.tmdbId;
+        if (targetId && targetId !== 'undefined') {
+          navigate(`/cast/tmdb-${targetId}?source=${member.source || 'tmdb'}`, { state });
+        }
+      }
+    }, 10);
   };
 
   // When in local mode or empty query, filters are already processed server-side.

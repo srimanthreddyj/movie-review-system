@@ -4,7 +4,7 @@ import { Film, Tv, Calendar } from 'lucide-react';
 import { getProxiedImageUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
-const MovieCard = ({ movie, userTags = [], userFavourites = [], onClick }) => {
+const MovieCard = ({ movie, userTags = [], userFavourites = [], onClick, state }) => {
   const { user } = useAuth();
   const { _id, refId, source, title, mediaType, releaseDate, posterUrl, genre = [] } = movie;
   
@@ -108,12 +108,12 @@ const MovieCard = ({ movie, userTags = [], userFavourites = [], onClick }) => {
             <CardContent />
           </div>
         ) : (
-          <Link to={linkTo} className="movie-card-link" style={!isValidId ? { pointerEvents: 'none' } : {}}>
+          <Link to={linkTo} state={state} className="movie-card-link" style={!isValidId ? { pointerEvents: 'none' } : {}}>
             <CardContent />
           </Link>
         )
       ) : (
-        <Link to={linkTo} className="movie-card-link">
+        <Link to={linkTo} state={state} className="movie-card-link">
           <CardContent />
         </Link>
       )}

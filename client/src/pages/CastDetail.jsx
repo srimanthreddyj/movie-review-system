@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { useParams, Link, useNavigate, useLocation } from 'react-router-dom';
 import api, { getProxiedImageUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -29,11 +29,17 @@ const CastDetail = () => {
   const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
 
   // Pagination States
-  const [currentPage, setCurrentPage] = useState(1);
+  const restoredState = location.state?.fromCastDetail;
+  const [currentPage, setCurrentPage] = useState(restoredState?.filmographyPage || 1);
   const itemsPerPage = 12;
 
   // Reset pagination page when search query changes or id shifts
+  const restoredRef = useRef(!!restoredState);
   useEffect(() => {
+    if (restoredRef.current) {
+      restoredRef.current = false;
+      return;
+    }
     setCurrentPage(1);
   }, [searchQuery, id]);
 
@@ -44,6 +50,20 @@ const CastDetail = () => {
       window.history.replaceState({}, document.title);
     }
   }, [location]);
+
+  const [scrollRestored, setScrollRestored] = useState(false);
+
+  useEffect(() => {
+    if (!loading && restoredState?.scrollY && !scrollRestored) {
+      setScrollRestored(true);
+      setTimeout(() => {
+        window.scrollTo({
+          top: restoredState.scrollY,
+          behavior: 'instant'
+        });
+      }, 100);
+    }
+  }, [loading, restoredState, scrollRestored]);
 
   useEffect(() => {
     if (isExternal) {
@@ -159,10 +179,37 @@ const CastDetail = () => {
 
 
       {/* Back button */}
-      <Link to="/cast" className="back-link flex-center" style={{ justifyContent: 'flex-start', marginBottom: '1.5rem', gap: '0.25rem' }}>
-        <ArrowLeft size={14} />
-        <span>Back to Cast profiles</span>
-      </Link>
+      {location.state?.fromCollections ? (
+        <Link 
+          to="/collections" 
+          state={location.state}
+          className="back-link flex-center" 
+          style={{ justifyContent: 'flex-start', marginBottom: '1.5rem', gap: '0.25rem' }}
+        >
+          <ArrowLeft size={14} />
+          <span>Back to Collections</span>
+        </Link>
+      ) : location.state?.fromFavourites ? (
+        <Link 
+          to="/favourites" 
+          state={location.state}
+          className="back-link flex-center" 
+          style={{ justifyContent: 'flex-start', marginBottom: '1.5rem', gap: '0.25rem' }}
+        >
+          <ArrowLeft size={14} />
+          <span>Back to Favourites</span>
+        </Link>
+      ) : (
+        <Link 
+          to="/cast" 
+          state={location.state?.fromCastDirectory || location.state}
+          className="back-link flex-center" 
+          style={{ justifyContent: 'flex-start', marginBottom: '1.5rem', gap: '0.25rem' }}
+        >
+          <ArrowLeft size={14} />
+          <span>Back to Cast profiles</span>
+        </Link>
+      )}
 
       {/* Main Profile Columns */}
       <div className="profile-grid">
@@ -287,6 +334,15 @@ const CastDetail = () => {
                 );
               }
 
+              const movieCardState = {
+                fromCastDirectory: location.state?.fromPage || location.state?.fromCastDirectory,
+                fromCastDetail: {
+                  castId: id,
+                  filmographyPage: currentPage,
+                  scrollY: window.scrollY
+                }
+              };
+
               return (
                 <>
                   <div className="grid-cards" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
@@ -302,6 +358,7 @@ const CastDetail = () => {
                           posterUrl: film.posterUrl,
                           mediaType: 'movie'
                         }}
+                        state={movieCardState}
                         userFavourites={[]}
                       />
                     ))}

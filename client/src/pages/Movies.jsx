@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState, useRef } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import api, { getProxiedImageUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import MovieCard from '../components/MovieCard';
@@ -7,6 +7,10 @@ import { Search, SlidersHorizontal, Tag, RotateCcw, Loader2, Film } from 'lucide
 
 const Movies = () => {
   const navigate = useNavigate();
+  const location = useLocation();
+  const restoredState = location.state?.fromPage;
+  const restoredRef = useRef(!!restoredState);
+
   const { user, refreshUser } = useAuth();
   const [movies, setMovies] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -14,14 +18,14 @@ const Movies = () => {
   const [importError, setImportError] = useState(null);
 
   // Filters State
-  const [searchQuery, setSearchQuery] = useState('');
-  const [mediaTypeFilter, setMediaTypeFilter] = useState('');
-  const [statusFilter, setStatusFilter] = useState('');
-  const [languageFilter, setLanguageFilter] = useState('');
-  const [tagFilter, setTagFilter] = useState('');
+  const [searchQuery, setSearchQuery] = useState(restoredState?.q || '');
+  const [mediaTypeFilter, setMediaTypeFilter] = useState(restoredState?.mediaType || '');
+  const [statusFilter, setStatusFilter] = useState(restoredState?.status || '');
+  const [languageFilter, setLanguageFilter] = useState(restoredState?.language || '');
+  const [tagFilter, setTagFilter] = useState(restoredState?.tag || '');
 
   // Pagination State
-  const [currentPage, setCurrentPage] = useState(1);
+  const [currentPage, setCurrentPage] = useState(restoredState?.page || 1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalMovies, setTotalMovies] = useState(0);
 
@@ -29,7 +33,7 @@ const Movies = () => {
   const [languages, setLanguages] = useState([]);
   const [userTags, setUserTags] = useState([]);
   const [userFavs, setUserFavs] = useState([]);
-  const [searchMode, setSearchMode] = useState('tmdb');
+  const [searchMode, setSearchMode] = useState(restoredState?.searchMode || 'tmdb');
 
   // Autocomplete suggestions state
   const [suggestions, setSuggestions] = useState([]);
@@ -82,6 +86,16 @@ const Movies = () => {
 
   // When filters or search queries change, reset page to 1
   useEffect(() => {
+    if (restoredRef.current) {
+      restoredRef.current = false;
+      if (searchMode === 'local' || !searchQuery) {
+        fetchCatalogData(currentPage);
+      } else {
+        handleSearch();
+      }
+      return;
+    }
+
     if (currentPage === 1) {
       if (searchMode === 'local' || !searchQuery) {
         fetchCatalogData(1);
@@ -95,6 +109,20 @@ const Movies = () => {
   useEffect(() => {
     refreshUser();
   }, []);
+
+  const [scrollRestored, setScrollRestored] = useState(false);
+
+  useEffect(() => {
+    if (!loading && restoredState?.scrollY && !scrollRestored) {
+      setScrollRestored(true);
+      setTimeout(() => {
+        window.scrollTo({
+          top: restoredState.scrollY,
+          behavior: 'instant'
+        });
+      }, 100);
+    }
+  }, [loading, restoredState, scrollRestored]);
 
   const handleToggleSearchMode = (mode) => {
     setSearchMode(mode);
@@ -189,18 +217,39 @@ const Movies = () => {
   };
 
   const handleMovieClick = async (movie) => {
-    const isLocal = !movie.source || movie.source === 'local';
-    if (isLocal) {
-      const localId = movie._id || movie.refId;
-      if (localId && localId !== 'undefined') {
-        navigate(`/movies/${localId}`);
+    const state = {
+      fromPage: {
+        page: currentPage,
+        q: searchQuery,
+        mediaType: mediaTypeFilter,
+        status: statusFilter,
+        language: languageFilter,
+        tag: tagFilter,
+        searchMode: searchMode,
+        scrollY: window.scrollY
       }
-      return;
-    }
-    const targetId = movie.refId || movie.tmdbId;
-    if (targetId && targetId !== 'undefined') {
-      navigate(`/movies/tmdb-${targetId}?source=${movie.source || 'tmdb'}&mediaType=${movie.mediaType || 'movie'}`);
-    }
+    };
+
+    // First replace the state of the current catalogue page in history before navigating away
+    navigate(location.pathname + location.search, {
+      replace: true,
+      state
+    });
+
+    const isLocal = !movie.source || movie.source === 'local';
+    setTimeout(() => {
+      if (isLocal) {
+        const localId = movie._id || movie.refId;
+        if (localId && localId !== 'undefined') {
+          navigate(`/movies/${localId}`, { state });
+        }
+      } else {
+        const targetId = movie.refId || movie.tmdbId;
+        if (targetId && targetId !== 'undefined') {
+          navigate(`/movies/tmdb-${targetId}?source=${movie.source || 'tmdb'}&mediaType=${movie.mediaType || 'movie'}`, { state });
+        }
+      }
+    }, 10);
   };
 
   // When in local mode or empty query, filters are already processed server-side.

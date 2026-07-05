@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import MovieCard from '../components/MovieCard';
@@ -8,14 +9,21 @@ import { Heart, Film, Users, Video, AlertTriangle } from 'lucide-react';
 
 const Favourites = () => {
   const { refreshUser } = useAuth();
+  const location = useLocation();
+  const restoredState = location.state?.fromFavourites;
+  const restoredRef = useRef(!!restoredState);
+
   const [favourites, setFavourites] = useState({ movies: [], cast: [], clips: [] });
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('movies'); // 'movies', 'cast', 'clips'
-  const [priorityFilter, setPriorityFilter] = useState(''); // '', 'High', 'Medium', 'Low'
-  const [currentPage, setCurrentPage] = useState(1);
+  const [activeTab, setActiveTab] = useState(restoredState?.activeTab || 'movies'); // 'movies', 'cast', 'clips'
+  const [priorityFilter, setPriorityFilter] = useState(restoredState?.priorityFilter || ''); // '', 'High', 'Medium', 'Low'
+  const [currentPage, setCurrentPage] = useState(restoredState?.page || 1);
 
   // Reset page when tab or priority changes
   useEffect(() => {
+    if (restoredRef.current) {
+      return;
+    }
     setCurrentPage(1);
   }, [activeTab, priorityFilter]);
 
@@ -23,6 +31,21 @@ const Favourites = () => {
     fetchFavourites();
     refreshUser();
   }, []);
+
+  const [scrollRestored, setScrollRestored] = useState(false);
+
+  useEffect(() => {
+    if (!loading && restoredState?.scrollY && !scrollRestored) {
+      setScrollRestored(true);
+      restoredRef.current = false;
+      setTimeout(() => {
+        window.scrollTo({
+          top: restoredState.scrollY,
+          behavior: 'instant'
+        });
+      }, 100);
+    }
+  }, [loading, restoredState, scrollRestored]);
 
   const fetchFavourites = async () => {
     setLoading(true);
@@ -83,12 +106,22 @@ const Favourites = () => {
     const renderGrid = (list) => (
       <div className="grid-cards" style={{ marginBottom: '2.5rem' }}>
         {list.map((item) => {
+          const cardState = {
+            fromFavourites: {
+              activeTab,
+              priorityFilter,
+              page: currentPage,
+              scrollY: window.scrollY
+            }
+          };
+
           if (activeTab === 'movies' && item.details) {
             return (
               <MovieCard 
                 key={item._id} 
                 movie={item.details} 
                 userFavourites={favourites.movies}
+                state={cardState}
               />
             );
           }
@@ -98,6 +131,7 @@ const Favourites = () => {
                 key={item._id} 
                 cast={item.details} 
                 userFavourites={favourites.cast}
+                state={cardState}
               />
             );
           }

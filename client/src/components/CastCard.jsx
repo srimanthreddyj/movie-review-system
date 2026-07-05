@@ -4,7 +4,7 @@ import { User, Globe } from 'lucide-react';
 import { getProxiedImageUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
-const CastCard = ({ cast, userFavourites = [], characterName, onClick }) => {
+const CastCard = ({ cast, userFavourites = [], characterName, onClick, state }) => {
   const { user } = useAuth();
   const { _id, refId, name, photoUrl, knownFor, gender, nationality, source, tmdbId } = cast;
 
@@ -91,12 +91,12 @@ const CastCard = ({ cast, userFavourites = [], characterName, onClick }) => {
             <CardContent />
           </div>
         ) : (
-          <Link to={linkTo} className="cast-card-link" style={!isValidId ? { pointerEvents: 'none' } : {}}>
+          <Link to={linkTo} state={state} className="cast-card-link" style={!isValidId ? { pointerEvents: 'none' } : {}}>
             <CardContent />
           </Link>
         )
       ) : (
-        <Link to={linkTo} className="cast-card-link">
+        <Link to={linkTo} state={state} className="cast-card-link">
           <CardContent />
         </Link>
       )}
