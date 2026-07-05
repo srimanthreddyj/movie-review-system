@@ -1,7 +1,7 @@
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
 
 // Helper: Fetch with timeout using AbortController
-const fetchWithTimeout = async (url, options = {}, timeoutMs = 4000) => {
+const fetchWithTimeout = async (url, options = {}, timeoutMs = 15000) => {
   const controller = new AbortController();
   const id = setTimeout(() => controller.abort(), timeoutMs);
   try {

@@ -110,13 +110,13 @@ exports.getCastById = async (req, res) => {
       try {
         const movieApiService = require('../services/movieApiService');
         const tmdbCredits = await movieApiService.getTmdbPersonMovieCredits(castMember.tmdbId, castMember.name);
-        
+
         if (tmdbCredits && tmdbCredits.length > 0) {
           const tmdbIds = tmdbCredits.map(c => c.tmdbId);
           // Find all local movies with these tmdbIds
           const localMovies = await Movie.find({ tmdbId: { $in: tmdbIds } })
             .select('_id tmdbId title posterUrl releaseDate');
-            
+
           const localMoviesMap = new Map();
           localMovies.forEach(m => {
             if (m.tmdbId) localMoviesMap.set(m.tmdbId.toString(), m);
@@ -381,7 +381,7 @@ exports.previewExternalCast = async (req, res) => {
           const tmdbIds = tmdbCredits.map(c => c.tmdbId);
           const localMovies = await Movie.find({ tmdbId: { $in: tmdbIds } })
             .select('_id tmdbId title posterUrl releaseDate');
-            
+
           const localMoviesMap = new Map();
           localMovies.forEach(m => {
             if (m.tmdbId) localMoviesMap.set(m.tmdbId.toString(), m);

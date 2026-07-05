@@ -28,6 +28,15 @@ const CastDetail = () => {
   // Collection Modal State
   const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
 
+  // Pagination States
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 12;
+
+  // Reset pagination page when search query changes or id shifts
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, id]);
+
   // Open collections modal if redirected with state from preview page
   useEffect(() => {
     if (location.state?.openCollections) {
@@ -253,35 +262,98 @@ const CastDetail = () => {
                 />
               </div>
             </div>
-            {filmography.length === 0 ? (
-              <div className="empty-filmography flex-center">
-                <span>No tracked movies or series linked to this profile.</span>
-              </div>
-            ) : filmography.filter(film => film.title && film.title.toLowerCase().includes(searchQuery.toLowerCase())).length === 0 ? (
-              <div className="empty-filmography flex-center">
-                <span>No movies found matching "{searchQuery}".</span>
-              </div>
-            ) : (
-              <div className="grid-cards" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
-                {filmography
-                  .filter(film => film.title && film.title.toLowerCase().includes(searchQuery.toLowerCase()))
-                  .map((film) => (
-                    <MovieCard 
-                      key={film.movieId}
-                      movie={{
-                        _id: film.movieId,
-                        refId: film.movieId.toString().replace(/^tmdb-/, ''),
-                        source: film.source || (film.movieId.toString().startsWith('tmdb-') ? 'tmdb' : 'local'),
-                        title: film.title,
-                        releaseDate: film.releaseDate,
-                        posterUrl: film.posterUrl,
-                        mediaType: 'movie'
-                      }}
-                      userFavourites={[]}
-                    />
-                  ))}
-              </div>
-            )}
+            {(() => {
+              const filteredFilmography = filmography.filter(film => 
+                film.title && film.title.toLowerCase().includes(searchQuery.toLowerCase())
+              );
+              const totalFilms = filteredFilmography.length;
+              const totalPages = Math.ceil(totalFilms / itemsPerPage);
+              const startIndex = (currentPage - 1) * itemsPerPage;
+              const paginatedFilmography = filteredFilmography.slice(startIndex, startIndex + itemsPerPage);
+
+              if (filmography.length === 0) {
+                return (
+                  <div className="empty-filmography flex-center">
+                    <span>No tracked movies or series linked to this profile.</span>
+                  </div>
+                );
+              }
+
+              if (filteredFilmography.length === 0) {
+                return (
+                  <div className="empty-filmography flex-center">
+                    <span>No movies found matching "{searchQuery}".</span>
+                  </div>
+                );
+              }
+
+              return (
+                <>
+                  <div className="grid-cards" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))' }}>
+                    {paginatedFilmography.map((film) => (
+                      <MovieCard 
+                        key={film.movieId}
+                        movie={{
+                          _id: film.movieId,
+                          refId: film.movieId.toString().replace(/^tmdb-/, ''),
+                          source: film.source || (film.movieId.toString().startsWith('tmdb-') ? 'tmdb' : 'local'),
+                          title: film.title,
+                          releaseDate: film.releaseDate,
+                          posterUrl: film.posterUrl,
+                          mediaType: 'movie'
+                        }}
+                        userFavourites={[]}
+                      />
+                    ))}
+                  </div>
+
+                  {totalPages > 1 && (
+                    <div className="pagination-container" style={{ marginTop: '1.5rem', display: 'flex', justifyContent: 'center', alignItems: 'center', gap: '0.25rem' }}>
+                      <button 
+                        onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                        disabled={currentPage === 1}
+                        className="pagination-btn"
+                        title="Previous Page"
+                      >
+                        Prev
+                      </button>
+                      
+                      {Array.from({ length: totalPages }, (_, i) => i + 1).map((p) => {
+                        const isNearStart = currentPage <= 4;
+                        const isNearEnd = currentPage >= totalPages - 3;
+                        
+                        if (totalPages <= 7 || p === 1 || p === totalPages || (p >= currentPage - 1 && p <= currentPage + 1)) {
+                          return (
+                            <button
+                              key={p}
+                              onClick={() => setCurrentPage(p)}
+                              className={`pagination-btn ${currentPage === p ? 'active' : ''}`}
+                            >
+                              {p}
+                            </button>
+                          );
+                        }
+                        
+                        if ((p === 2 && !isNearStart) || (p === totalPages - 1 && !isNearEnd)) {
+                          return <span key={p} className="pagination-ellipsis">...</span>;
+                        }
+                        
+                        return null;
+                      })}
+
+                      <button 
+                        onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                        disabled={currentPage === totalPages}
+                        className="pagination-btn"
+                        title="Next Page"
+                      >
+                        Next
+                      </button>
+                    </div>
+                  )}
+                </>
+              );
+            })()}
           </section>
         </div>
       </div>
