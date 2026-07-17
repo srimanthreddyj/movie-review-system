@@ -24,3 +24,6 @@ yarn-error.log*
  
 # Local API keys file
 ApiKeys.txt
+
+# Local Maintenance & Test Scripts
+scripts/
