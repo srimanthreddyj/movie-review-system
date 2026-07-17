@@ -44,6 +44,7 @@ app.use('/api/clips', require('./routes/clipsRoutes'));
 app.use('/api/collections', require('./routes/collectionsRoutes'));
 app.use('/api/tags', require('./routes/tagsRoutes'));
 app.use('/api/comments', require('./routes/commentsRoutes'));
+app.use('/api/settings', require('./routes/settingsRoutes'));
 
 // Basic health check route
 app.get('/health', (req, res) => {

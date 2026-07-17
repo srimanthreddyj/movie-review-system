@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import api from '../services/api';
 import ExternalPreviewModal from '../components/ExternalPreviewModal';
-import { Film, User, CheckCircle2, Search, Loader2 } from 'lucide-react';
+import { Film, User, CheckCircle2, Search, Loader2, PowerOff, Power } from 'lucide-react';
 import './Admin.css';
 
 /**
@@ -14,6 +14,7 @@ import './Admin.css';
 const Admin = () => {
   const [activeTab, setActiveTab] = useState('movies'); // 'movies' or 'cast'
   const [onlyActresses, setOnlyActresses] = useState(false);
+  const [externalApisEnabled, setExternalApisEnabled] = useState(true);
 
   // Movie search states
   const [searchQuery, setSearchQuery] = useState('');
@@ -33,6 +34,29 @@ const Admin = () => {
 
   // Healing catalogue states
   const [healing, setHealing] = useState(false);
+
+  React.useEffect(() => {
+    const fetchSettings = async () => {
+      try {
+        const { data } = await api.get('/settings');
+        setExternalApisEnabled(data.externalApisEnabled);
+      } catch (err) {
+        console.error('Failed to fetch settings', err);
+      }
+    };
+    fetchSettings();
+  }, []);
+
+  const handleToggleApis = async () => {
+    try {
+      const newValue = !externalApisEnabled;
+      setExternalApisEnabled(newValue);
+      await api.put('/settings', { externalApisEnabled: newValue });
+    } catch (err) {
+      console.error('Failed to update settings', err);
+      setExternalApisEnabled(!externalApisEnabled); // Revert on failure
+    }
+  };
 
   const handleHealCatalogue = async () => {
     setHealing(true);
@@ -160,6 +184,33 @@ const Admin = () => {
   return (
     <section className="admin-page">
       <h1 className="page-title">Import Hub</h1>
+
+      {/* Settings / Danger Zone */}
+      <div className="panel danger-zone" style={{ borderLeft: '4px solid #ef4444', marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h2 style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0 0 0.5rem 0' }}>
+              <PowerOff size={20} /> Danger Zone: API Kill Switch
+            </h2>
+            <p className="panel-desc" style={{ margin: 0 }}>
+              Toggle this switch to simulate a total external network failure (TMDB, OMDb, Gemini).
+              When OFF, the app will instantly fall back to rendering local-only database cache.
+            </p>
+          </div>
+          <button 
+            onClick={handleToggleApis}
+            className={externalApisEnabled ? 'btn-primary' : 'btn-accent'}
+            style={{ 
+              display: 'flex', alignItems: 'center', gap: '0.5rem', 
+              backgroundColor: externalApisEnabled ? '#10b981' : '#ef4444',
+              borderColor: 'transparent'
+            }}
+          >
+            {externalApisEnabled ? <Power size={18} /> : <PowerOff size={18} />}
+            {externalApisEnabled ? 'APIs Enabled' : 'APIs Disabled'}
+          </button>
+        </div>
+      </div>
 
       <div className="panel search-import-panel">
         <div className="tab-header flex">

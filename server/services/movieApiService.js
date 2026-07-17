@@ -1,4 +1,5 @@
 const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+const { isExternalApiEnabled } = require('../controllers/settingsController');
 
 // Helper: Fetch with timeout using AbortController
 const fetchWithTimeout = async (url, options = {}, timeoutMs = 15000) => {
@@ -16,6 +17,7 @@ const fetchWithTimeout = async (url, options = {}, timeoutMs = 15000) => {
 
 // Helper: Query Gemini API iterating over available models
 const queryGemini = async (prompt) => {
+  if (!isExternalApiEnabled()) throw new Error('External APIs are disabled by Admin');
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('Gemini API Key missing');
 
@@ -124,6 +126,7 @@ const filterAndCapCast = (castArray) => {
 
 // 1. TMDB API Client
 const searchTMDB = async (query) => {
+  if (!isExternalApiEnabled()) throw new Error('External APIs are disabled by Admin');
   const apiKey = process.env.TMDB_API_KEY;
   if (!apiKey) throw new Error('TMDB API Key missing');
 
@@ -180,6 +183,7 @@ const searchTMDB = async (query) => {
 };
 
 const getTMDBDetails = async (tmdbId, mediaType = 'movie') => {
+  if (!isExternalApiEnabled()) throw new Error('External APIs are disabled by Admin');
   const apiKey = process.env.TMDB_API_KEY;
   if (!apiKey) throw new Error('TMDB API Key missing');
 
@@ -268,6 +272,7 @@ const getTMDBDetails = async (tmdbId, mediaType = 'movie') => {
 
 // 2. OMDb API Client
 const searchOMDB = async (query) => {
+  if (!isExternalApiEnabled()) throw new Error('External APIs are disabled by Admin');
   const apiKey = process.env.OMDB_API_KEY;
   if (!apiKey) throw new Error('OMDb API Key missing');
 
@@ -291,6 +296,7 @@ const searchOMDB = async (query) => {
 };
 
 const getOMDBDetails = async (imdbId) => {
+  if (!isExternalApiEnabled()) throw new Error('External APIs are disabled by Admin');
   const apiKey = process.env.OMDB_API_KEY;
   if (!apiKey) throw new Error('OMDb API Key missing');
 
@@ -357,6 +363,7 @@ const getOMDBDetails = async (imdbId) => {
 
 // 3. Wikidata Client
 const searchWikidata = async (query) => {
+  if (!isExternalApiEnabled()) throw new Error('External APIs are disabled by Admin');
   const searchUrl = `https://www.wikidata.org/w/api.php?action=wbsearchentities&search=${encodeURIComponent(query)}&language=en&format=json&origin=*&type=item`;
   const res = await fetchWithTimeout(searchUrl);
   if (!res.ok) throw new Error(`Wikidata Search failed: ${res.statusText}`);
@@ -375,6 +382,7 @@ const searchWikidata = async (query) => {
 };
 
 const getWikidataDetails = async (wikidataId) => {
+  if (!isExternalApiEnabled()) throw new Error('External APIs are disabled by Admin');
   const url = `https://www.wikidata.org/wiki/Special:EntityData/${wikidataId}.json`;
   const res = await fetchWithTimeout(url);
   if (!res.ok) throw new Error(`Wikidata Details failed: ${res.statusText}`);
@@ -597,6 +605,7 @@ exports.getMovieDetails = async (refId, source, titleQuery, mediaType = 'movie')
 
 // Fetch person details from TMDB to enrich cast profiles on-the-fly
 exports.enrichCastFromTMDB = async (name) => {
+  if (!isExternalApiEnabled()) throw new Error('External APIs are disabled by Admin');
   const apiKey = process.env.TMDB_API_KEY;
   if (!apiKey) return null;
 
@@ -696,6 +705,7 @@ exports.enrichCastProfile = async (name) => {
 
 // Search external persons using TMDB API (with Gemini fallback)
 exports.searchExternalPersons = async (query) => {
+  if (!isExternalApiEnabled()) throw new Error('External APIs are disabled by Admin');
   const apiKey = process.env.TMDB_API_KEY;
   if (apiKey) {
     try {
@@ -765,6 +775,7 @@ exports.searchExternalPersons = async (query) => {
 
 // Fetch full details of a person using TMDB API
 exports.getTmdbPersonDetails = async (tmdbId) => {
+  if (!isExternalApiEnabled()) throw new Error('External APIs are disabled by Admin');
   const apiKey = process.env.TMDB_API_KEY;
   if (!apiKey) throw new Error('TMDB API Key missing');
 
