@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import api from '../services/api';
 import ExternalPreviewModal from '../components/ExternalPreviewModal';
-import { Film, User, CheckCircle2, Search, Loader2, PowerOff, Power } from 'lucide-react';
+import { Film, User, CheckCircle2, Search, Loader2, PowerOff, Power, BarChart3, Settings, Database, Users, Video, MessageSquare, Folder } from 'lucide-react';
 import './Admin.css';
 
 /**
@@ -12,9 +12,14 @@ import './Admin.css';
  *   • Manual movie creation with rich metadata fields
  */
 const Admin = () => {
-  const [activeTab, setActiveTab] = useState('movies'); // 'movies' or 'cast'
+  const [adminTab, setAdminTab] = useState('dashboard'); // 'dashboard', 'content', 'settings'
+  const [activeTab, setActiveTab] = useState('movies'); // 'movies' or 'cast' for content tab
   const [onlyActresses, setOnlyActresses] = useState(false);
   const [externalApisEnabled, setExternalApisEnabled] = useState(true);
+
+  // Metrics state
+  const [metrics, setMetrics] = useState(null);
+  const [metricsLoading, setMetricsLoading] = useState(false);
 
   // Movie search states
   const [searchQuery, setSearchQuery] = useState('');
@@ -35,7 +40,7 @@ const Admin = () => {
   // Healing catalogue states
   const [healing, setHealing] = useState(false);
 
-  React.useEffect(() => {
+  useEffect(() => {
     const fetchSettings = async () => {
       try {
         const { data } = await api.get('/settings');
@@ -46,6 +51,24 @@ const Admin = () => {
     };
     fetchSettings();
   }, []);
+
+  useEffect(() => {
+    if (adminTab === 'dashboard') {
+      fetchMetrics();
+    }
+  }, [adminTab]);
+
+  const fetchMetrics = async () => {
+    setMetricsLoading(true);
+    try {
+      const { data } = await api.get('/admin/metrics');
+      setMetrics(data);
+    } catch (err) {
+      console.error('Failed to fetch metrics', err);
+    } finally {
+      setMetricsLoading(false);
+    }
+  };
 
   const handleToggleApis = async () => {
     try {
@@ -196,58 +219,158 @@ const Admin = () => {
   };
 
   return (
-    <section className="admin-page">
-      <h1 className="page-title">Import Hub</h1>
-
-      {/* Settings / Danger Zone */}
-      <div className="panel danger-zone" style={{ borderLeft: '4px solid #ef4444', marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h2 style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0 0 0.5rem 0' }}>
-              <PowerOff size={20} /> Danger Zone: API Kill Switch
-            </h2>
-            <p className="panel-desc" style={{ margin: 0 }}>
-              Toggle this switch to simulate a total external network failure (TMDB, OMDb, Gemini).
-              When OFF, the app will instantly fall back to rendering local-only database cache.
-            </p>
-          </div>
-          <button 
-            onClick={handleToggleApis}
-            className={externalApisEnabled ? 'btn-primary' : 'btn-accent'}
-            style={{ 
-              display: 'flex', alignItems: 'center', gap: '0.5rem', 
-              backgroundColor: externalApisEnabled ? '#10b981' : '#ef4444',
-              borderColor: 'transparent'
-            }}
-          >
-            {externalApisEnabled ? <Power size={18} /> : <PowerOff size={18} />}
-            {externalApisEnabled ? 'APIs Enabled' : 'APIs Disabled'}
-          </button>
-        </div>
+    <section className="admin-page container">
+      <div className="admin-header">
+        <h1 className="page-title" style={{ margin: 0 }}>Admin Dashboard</h1>
+        <p className="panel-desc">Manage system settings, metrics, and content imports.</p>
       </div>
 
-      {/* Database Maintenance Tools */}
-      <div className="panel maintenance-zone" style={{ borderLeft: '4px solid #3b82f6', marginBottom: '2rem' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div>
-            <h2 style={{ color: '#3b82f6', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0 0 0.5rem 0' }}>
-              <CheckCircle2 size={20} /> Database Maintenance
-            </h2>
-            <p className="panel-desc" style={{ margin: 0 }}>
-              Run maintenance scripts to clean up the database. E.g., fixing duplicate cast members resulting from multi-role imports.
-            </p>
-          </div>
-          <button 
-            onClick={handleCleanupCast}
-            disabled={loading}
-            className="btn-primary"
-            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#3b82f6', borderColor: 'transparent' }}
-          >
-            {loading ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />}
-            Cleanup Duplicate Cast
-          </button>
-        </div>
+      {/* Top-Level Navigation */}
+      <div className="admin-nav-tabs">
+        <button 
+          className={`admin-nav-btn ${adminTab === 'dashboard' ? 'active' : ''}`}
+          onClick={() => setAdminTab('dashboard')}
+        >
+          <BarChart3 size={18} /> Overview
+        </button>
+        <button 
+          className={`admin-nav-btn ${adminTab === 'content' ? 'active' : ''}`}
+          onClick={() => setAdminTab('content')}
+        >
+          <Database size={18} /> Content Management
+        </button>
+        <button 
+          className={`admin-nav-btn ${adminTab === 'settings' ? 'active' : ''}`}
+          onClick={() => setAdminTab('settings')}
+        >
+          <Settings size={18} /> System Settings
+        </button>
       </div>
+
+      <div className="admin-content-area">
+        {/* DASHBOARD TAB */}
+        {adminTab === 'dashboard' && (
+          <div className="admin-tab-pane animate-fade-in">
+            <h2 style={{ marginBottom: '1.5rem' }}>System Metrics</h2>
+            {metricsLoading || !metrics ? (
+              <div className="flex-center" style={{ padding: '3rem', color: 'var(--text-muted)' }}>
+                <Loader2 className="animate-spin" size={24} style={{ marginRight: '0.5rem' }} /> Loading metrics...
+              </div>
+            ) : (
+              <div className="metrics-grid">
+                <div className="metric-card">
+                  <div className="metric-icon-wrapper users"><Users size={24} /></div>
+                  <div className="metric-info">
+                    <span className="metric-value">{metrics.totalUsers}</span>
+                    <span className="metric-label">Registered Users</span>
+                  </div>
+                </div>
+                <div className="metric-card">
+                  <div className="metric-icon-wrapper movies"><Film size={24} /></div>
+                  <div className="metric-info">
+                    <span className="metric-value">{metrics.totalMovies}</span>
+                    <span className="metric-label">Movies & Shows</span>
+                  </div>
+                </div>
+                <div className="metric-card">
+                  <div className="metric-icon-wrapper cast"><User size={24} /></div>
+                  <div className="metric-info">
+                    <span className="metric-value">{metrics.totalCast}</span>
+                    <span className="metric-label">Cast Profiles</span>
+                  </div>
+                </div>
+                <div className="metric-card">
+                  <div className="metric-icon-wrapper clips"><Video size={24} /></div>
+                  <div className="metric-info">
+                    <span className="metric-value">{metrics.totalClips}</span>
+                    <span className="metric-label">Video Clips</span>
+                  </div>
+                </div>
+                <div className="metric-card">
+                  <div className="metric-icon-wrapper collections"><Folder size={24} /></div>
+                  <div className="metric-info">
+                    <span className="metric-value">{metrics.totalCollections}</span>
+                    <span className="metric-label">User Collections</span>
+                  </div>
+                </div>
+                <div className="metric-card">
+                  <div className="metric-icon-wrapper comments"><MessageSquare size={24} /></div>
+                  <div className="metric-info">
+                    <span className="metric-value">{metrics.totalComments}</span>
+                    <span className="metric-label">Reviews & Comments</span>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* SETTINGS TAB */}
+        {adminTab === 'settings' && (
+          <div className="admin-tab-pane animate-fade-in">
+            {/* Settings / Danger Zone */}
+            <div className="panel danger-zone" style={{ borderLeft: '4px solid #ef4444', marginBottom: '2rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                <div>
+                  <h2 style={{ color: '#ef4444', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0 0 0.5rem 0' }}>
+                    <PowerOff size={20} /> Danger Zone: API Kill Switch
+                  </h2>
+                  <p className="panel-desc" style={{ margin: 0 }}>
+                    Toggle this switch to simulate a total external network failure (TMDB, OMDb, Gemini).
+                    When OFF, the app will instantly fall back to rendering local-only database cache.
+                  </p>
+                </div>
+                <button 
+                  onClick={handleToggleApis}
+                  className={externalApisEnabled ? 'btn-primary' : 'btn-accent'}
+                  style={{ 
+                    display: 'flex', alignItems: 'center', gap: '0.5rem', 
+                    backgroundColor: externalApisEnabled ? '#10b981' : '#ef4444',
+                    borderColor: 'transparent',
+                    minWidth: '160px',
+                    justifyContent: 'center'
+                  }}
+                >
+                  {externalApisEnabled ? <Power size={18} /> : <PowerOff size={18} />}
+                  {externalApisEnabled ? 'APIs Enabled' : 'APIs Disabled'}
+                </button>
+              </div>
+            </div>
+
+            {/* Database Maintenance Tools */}
+            <div className="panel maintenance-zone" style={{ borderLeft: '4px solid #3b82f6', marginBottom: '2rem' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '1rem' }}>
+                <div>
+                  <h2 style={{ color: '#3b82f6', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0 0 0.5rem 0' }}>
+                    <CheckCircle2 size={20} /> Database Maintenance
+                  </h2>
+                  <p className="panel-desc" style={{ margin: 0 }}>
+                    Run maintenance scripts to clean up the database. E.g., fixing duplicate cast members resulting from multi-role imports.
+                  </p>
+                </div>
+                <button 
+                  onClick={handleCleanupCast}
+                  disabled={loading}
+                  className="btn-primary"
+                  style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#3b82f6', borderColor: 'transparent', minWidth: '160px', justifyContent: 'center' }}
+                >
+                  {loading ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />}
+                  Cleanup Cast
+                </button>
+              </div>
+            </div>
+            
+            {message && !loading && (
+              <div className="alert alert-info" style={{ marginTop: '1rem' }}>
+                {message}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* CONTENT MANAGEMENT TAB */}
+        {adminTab === 'content' && (
+          <div className="admin-tab-pane animate-fade-in">
 
       <div className="panel search-import-panel">
         <div className="tab-header flex">
@@ -506,6 +629,8 @@ const Admin = () => {
             Create Movie
           </button>
         </form>
+          </div>
+        )}
       </div>
 
       {/* External Preview Modal */}

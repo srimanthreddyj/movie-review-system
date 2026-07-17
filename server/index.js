@@ -45,6 +45,7 @@ app.use('/api/collections', require('./routes/collectionsRoutes'));
 app.use('/api/tags', require('./routes/tagsRoutes'));
 app.use('/api/comments', require('./routes/commentsRoutes'));
 app.use('/api/settings', require('./routes/settingsRoutes'));
+app.use('/api/admin', require('./routes/adminRoutes'));
 
 // Basic health check route
 app.get('/health', (req, res) => {

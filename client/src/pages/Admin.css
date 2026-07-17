@@ -372,3 +372,90 @@ textarea.form-input {
   color: #3b82f6;
 }
 
+
+/* Admin Dashboard Top Navigation */
+.admin-nav-tabs {
+  display: flex;
+  gap: 1rem;
+  margin-bottom: 2rem;
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: 0.5rem;
+}
+.admin-nav-btn {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 1.05rem;
+  font-weight: 500;
+  cursor: pointer;
+  padding: 0.75rem 1.25rem;
+  border-radius: var(--border-radius);
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+.admin-nav-btn:hover {
+  color: var(--text-primary);
+  background-color: var(--bg-secondary);
+}
+.admin-nav-btn.active {
+  color: #4f46e5;
+  background-color: rgba(79, 70, 229, 0.08);
+  font-weight: 600;
+}
+
+/* Metrics Dashboard Grid */
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1.5rem;
+}
+.metric-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--border-radius);
+  padding: 1.5rem;
+  display: flex;
+  align-items: center;
+  gap: 1.25rem;
+  box-shadow: 0 4px 12px var(--shadow);
+  backdrop-filter: blur(8px);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.metric-card:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 8px 24px var(--shadow);
+}
+.metric-icon-wrapper {
+  width: 56px;
+  height: 56px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+}
+.metric-icon-wrapper.users { background: linear-gradient(135deg, #3b82f6, #2563eb); }
+.metric-icon-wrapper.movies { background: linear-gradient(135deg, #10b981, #059669); }
+.metric-icon-wrapper.cast { background: linear-gradient(135deg, #8b5cf6, #7c3aed); }
+.metric-icon-wrapper.clips { background: linear-gradient(135deg, #ef4444, #dc2626); }
+.metric-icon-wrapper.collections { background: linear-gradient(135deg, #f59e0b, #d97706); }
+.metric-icon-wrapper.comments { background: linear-gradient(135deg, #ec4899, #db2777); }
+
+.metric-info {
+  display: flex;
+  flex-direction: column;
+}
+.metric-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+.metric-label {
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
