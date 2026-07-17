@@ -315,16 +315,31 @@ const Collections = () => {
           </div>
 
           {/* Banner Hero */}
-          <div className="collection-banner flex-center" style={{
-            backgroundImage: selectedCol.coverImage ? `linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0.85)), url(${selectedCol.coverImage})` : 'linear-gradient(135deg, var(--bg-tertiary), var(--accent-light))'
-          }}>
-            <div className="banner-content">
-              <FolderOpen size={48} className="banner-folder-icon" />
-              <h1 className="banner-title">{selectedCol.name}</h1>
-              <p className="banner-desc">{selectedCol.description || 'No description provided.'}</p>
-              <span className="banner-count-tag">{selectedCol.items?.length || 0} items stored</span>
-            </div>
-          </div>
+          {(() => {
+            let heroImage = selectedCol.coverImage;
+            if (!heroImage && selectedCol.items && selectedCol.items.length > 0) {
+              const firstItem = selectedCol.items[0].details;
+              if (firstItem) {
+                if (selectedCol.items[0].entityType === 'movie') heroImage = firstItem.posterUrl || (firstItem.posterPath ? `https://image.tmdb.org/t/p/w500${firstItem.posterPath}` : null);
+                else if (selectedCol.items[0].entityType === 'cast') heroImage = firstItem.profileUrl || (firstItem.profilePath ? `https://image.tmdb.org/t/p/w500${firstItem.profilePath}` : null);
+                else if (selectedCol.items[0].entityType === 'clip') heroImage = firstItem.thumbnailUrl;
+              }
+            }
+            const bannerStyle = heroImage 
+              ? { backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.4), rgba(0,0,0,0.85)), url(${heroImage})` }
+              : { background: 'linear-gradient(135deg, var(--bg-tertiary), var(--accent-light))' };
+              
+            return (
+              <div className="collection-banner flex-center" style={bannerStyle}>
+                <div className="banner-content">
+                  {!heroImage && <div className="banner-initial-icon flex-center">{selectedCol.name ? selectedCol.name.charAt(0).toUpperCase() : '?'}</div>}
+                  <h1 className="banner-title" style={{ marginTop: !heroImage ? '1rem' : '0' }}>{selectedCol.name}</h1>
+                  <p className="banner-desc">{selectedCol.description || 'No description provided.'}</p>
+                  <span className="banner-count-tag">{selectedCol.items?.length || 0} items stored</span>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Tab Selector */}
           <div className="collections-tabs flex-center">
@@ -532,9 +547,15 @@ const Collections = () => {
                 <div className="grid-cards">
                   {paginatedCollections.map((col) => {
                     const count = col.items?.length || 0;
-                    const coverStyle = col.coverImage 
-                      ? { backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.75)), url(${col.coverImage})` }
-                      : { background: 'linear-gradient(135deg, var(--bg-tertiary), var(--accent-light))' };
+                    
+                    let coverStyle = {};
+                    if (col.coverImage) {
+                      coverStyle = { backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.75)), url(${col.coverImage})` };
+                    } else if (col.previewImage) {
+                      coverStyle = { backgroundImage: `linear-gradient(to bottom, rgba(0,0,0,0.1), rgba(0,0,0,0.75)), url(${col.previewImage})` };
+                    }
+                    
+                    const firstLetter = col.name ? col.name.charAt(0).toUpperCase() : '?';
 
                     return (
                       <div 
@@ -542,9 +563,18 @@ const Collections = () => {
                         className="card collection-card-preview"
                         onClick={() => fetchCollectionDetail(col._id)}
                       >
-                        <div className="col-preview-banner" style={coverStyle}>
-                          <span className="col-preview-badge">{count} items</span>
-                        </div>
+                        {col.coverImage || col.previewImage ? (
+                          <div className="col-preview-banner" style={coverStyle}>
+                            <span className="col-preview-badge">{count} items</span>
+                          </div>
+                        ) : (
+                          <div className="col-preview-banner empty-cover flex-center" style={{ background: 'linear-gradient(135deg, var(--bg-tertiary), var(--accent-light))', display: 'flex', flexDirection: 'column' }}>
+                            <span className="col-initial-placeholder" style={{ fontSize: '3rem', fontWeight: 'bold', color: 'rgba(255,255,255,0.4)' }}>
+                              {firstLetter}
+                            </span>
+                            <span className="col-preview-badge" style={{ position: 'absolute', top: '10px', right: '10px' }}>{count} items</span>
+                          </div>
+                        )}
                         <div className="card-content">
                           <h3 className="col-preview-name">{col.name}</h3>
                           <p className="col-preview-desc">{col.description || 'No description provided.'}</p>

@@ -1,4 +1,5 @@
 const Collection = require('../models/Collection');
+// Helper models to get images
 const Movie = require('../models/Movie');
 const Cast = require('../models/Cast');
 const Clip = require('../models/Clip');
@@ -6,7 +7,26 @@ const Clip = require('../models/Clip');
 // Get all collections for the authenticated user
 exports.getCollections = async (req, res) => {
   try {
-    const collections = await Collection.find({ userId: req.user.id }).sort({ createdAt: -1 });
+    const collections = await Collection.find({ userId: req.user.id }).sort({ createdAt: -1 }).lean();
+    
+    // Add preview images for collections without a coverImage
+    for (const col of collections) {
+      if (!col.coverImage && col.items && col.items.length > 0) {
+        // Try to get the image of the first item
+        const firstItem = col.items[0];
+        if (firstItem.entityType === 'movie') {
+          const movie = await Movie.findById(firstItem.entityId).select('posterUrl posterPath');
+          if (movie) col.previewImage = movie.posterUrl || (movie.posterPath ? `https://image.tmdb.org/t/p/w500${movie.posterPath}` : null);
+        } else if (firstItem.entityType === 'cast') {
+          const cast = await Cast.findById(firstItem.entityId).select('profileUrl profilePath');
+          if (cast) col.previewImage = cast.profileUrl || (cast.profilePath ? `https://image.tmdb.org/t/p/w500${cast.profilePath}` : null);
+        } else if (firstItem.entityType === 'clip') {
+          const clip = await Clip.findById(firstItem.entityId).select('thumbnailUrl');
+          if (clip) col.previewImage = clip.thumbnailUrl;
+        }
+      }
+    }
+    
     res.json(collections);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
