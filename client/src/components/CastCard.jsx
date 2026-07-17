@@ -4,7 +4,7 @@ import { User, Globe } from 'lucide-react';
 import { getProxiedImageUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
-const CastCard = ({ cast, userFavourites = [], characterName, onClick, state }) => {
+const CastCard = ({ cast, userFavourites = [], characterName, onClick, state, highlighted }) => {
   const { user } = useAuth();
   const { _id, refId, name, photoUrl, knownFor, gender, nationality, source, tmdbId } = cast;
 
@@ -80,26 +80,10 @@ const CastCard = ({ cast, userFavourites = [], characterName, onClick, state }) 
   );
 
   return (
-    <div className={`card cast-card ${isFemale ? 'actress-card' : ''}`}>
-      {isExternal ? (
-        onClick ? (
-          <div 
-            onClick={() => onClick && onClick(cast)} 
-            className="cast-card-link"
-            style={{ cursor: 'pointer', height: '100%', display: 'flex', flexDirection: 'column' }}
-          >
-            <CardContent />
-          </div>
-        ) : (
-          <Link to={linkTo} state={state} className="cast-card-link" style={!isValidId ? { pointerEvents: 'none' } : {}}>
-            <CardContent />
-          </Link>
-        )
-      ) : (
-        <Link to={linkTo} state={state} className="cast-card-link">
-          <CardContent />
-        </Link>
-      )}
+    <div className={`card cast-card ${isFemale ? 'actress-card' : ''} ${highlighted ? 'card-highlighted' : ''}`}>
+      <Link to={linkTo} state={state} className="cast-card-link" style={!isValidId ? { pointerEvents: 'none' } : {}} onClick={() => onClick && onClick(cast)}>
+        <CardContent />
+      </Link>
 
       <style>{`
         .cast-card {

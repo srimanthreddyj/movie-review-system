@@ -4,12 +4,11 @@ import api, { getProxiedImageUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import MovieCard from '../components/MovieCard';
 import { Search, SlidersHorizontal, Tag, RotateCcw, Loader2, Film } from 'lucide-react';
+import { useRestorePageState } from '../context/NavigationHistoryContext';
 
 const Movies = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const restoredState = location.state?.fromPage;
-  const restoredRef = useRef(!!restoredState);
 
   const { user, refreshUser } = useAuth();
   const [movies, setMovies] = useState([]);
@@ -17,15 +16,29 @@ const Movies = () => {
   const [importingMovie, setImportingMovie] = useState(false);
   const [importError, setImportError] = useState(null);
 
-  // Filters State
-  const [searchQuery, setSearchQuery] = useState(restoredState?.q || '');
-  const [mediaTypeFilter, setMediaTypeFilter] = useState(restoredState?.mediaType || '');
-  const [statusFilter, setStatusFilter] = useState(restoredState?.status || '');
-  const [languageFilter, setLanguageFilter] = useState(restoredState?.language || '');
-  const [tagFilter, setTagFilter] = useState(restoredState?.tag || '');
+  // Navigation History State Restoration
+  const [pageState, setPageState] = useRestorePageState('movies', {
+    currentPage: 1,
+    searchQuery: '',
+    mediaTypeFilter: '',
+    statusFilter: '',
+    languageFilter: '',
+    tagFilter: '',
+    searchMode: 'tmdb',
+    selectedCardId: null
+  }, loading);
 
-  // Pagination State
-  const [currentPage, setCurrentPage] = useState(restoredState?.page || 1);
+  const { currentPage, searchQuery, mediaTypeFilter, statusFilter, languageFilter, tagFilter, searchMode, selectedCardId } = pageState;
+
+  const setCurrentPage = (val) => setPageState(prev => ({ ...prev, currentPage: typeof val === 'function' ? val(prev.currentPage) : val }));
+  const setSearchQuery = (val) => setPageState(prev => ({ ...prev, searchQuery: typeof val === 'function' ? val(prev.searchQuery) : val }));
+  const setMediaTypeFilter = (val) => setPageState(prev => ({ ...prev, mediaTypeFilter: typeof val === 'function' ? val(prev.mediaTypeFilter) : val }));
+  const setStatusFilter = (val) => setPageState(prev => ({ ...prev, statusFilter: typeof val === 'function' ? val(prev.statusFilter) : val }));
+  const setLanguageFilter = (val) => setPageState(prev => ({ ...prev, languageFilter: typeof val === 'function' ? val(prev.languageFilter) : val }));
+  const setTagFilter = (val) => setPageState(prev => ({ ...prev, tagFilter: typeof val === 'function' ? val(prev.tagFilter) : val }));
+  const setSearchMode = (val) => setPageState(prev => ({ ...prev, searchMode: typeof val === 'function' ? val(prev.searchMode) : val }));
+  const setSelectedCardId = (val) => setPageState(prev => ({ ...prev, selectedCardId: typeof val === 'function' ? val(prev.selectedCardId) : val }));
+
   const [totalPages, setTotalPages] = useState(1);
   const [totalMovies, setTotalMovies] = useState(0);
 
@@ -33,7 +46,6 @@ const Movies = () => {
   const [languages, setLanguages] = useState([]);
   const [userTags, setUserTags] = useState([]);
   const [userFavs, setUserFavs] = useState([]);
-  const [searchMode, setSearchMode] = useState(restoredState?.searchMode || 'tmdb');
 
   // Autocomplete suggestions state
   const [suggestions, setSuggestions] = useState([]);
@@ -77,8 +89,11 @@ const Movies = () => {
     }
   };
 
+  const isInitialMountRef = useRef(true);
+
   // Trigger loading when currentPage changes
   useEffect(() => {
+    if (isInitialMountRef.current) return;
     if (searchMode === 'local' || !searchQuery) {
       fetchCatalogData(currentPage);
     }
@@ -86,8 +101,8 @@ const Movies = () => {
 
   // When filters or search queries change, reset page to 1
   useEffect(() => {
-    if (restoredRef.current) {
-      restoredRef.current = false;
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
       if (searchMode === 'local' || !searchQuery) {
         fetchCatalogData(currentPage);
       } else {
@@ -109,20 +124,6 @@ const Movies = () => {
   useEffect(() => {
     refreshUser();
   }, []);
-
-  const [scrollRestored, setScrollRestored] = useState(false);
-
-  useEffect(() => {
-    if (!loading && restoredState?.scrollY && !scrollRestored) {
-      setScrollRestored(true);
-      setTimeout(() => {
-        window.scrollTo({
-          top: restoredState.scrollY,
-          behavior: 'instant'
-        });
-      }, 100);
-    }
-  }, [loading, restoredState, scrollRestored]);
 
   const handleToggleSearchMode = (mode) => {
     setSearchMode(mode);
@@ -216,40 +217,8 @@ const Movies = () => {
     }
   };
 
-  const handleMovieClick = async (movie) => {
-    const state = {
-      fromPage: {
-        page: currentPage,
-        q: searchQuery,
-        mediaType: mediaTypeFilter,
-        status: statusFilter,
-        language: languageFilter,
-        tag: tagFilter,
-        searchMode: searchMode,
-        scrollY: window.scrollY
-      }
-    };
-
-    // First replace the state of the current catalogue page in history before navigating away
-    navigate(location.pathname + location.search, {
-      replace: true,
-      state
-    });
-
-    const isLocal = !movie.source || movie.source === 'local';
-    setTimeout(() => {
-      if (isLocal) {
-        const localId = movie._id || movie.refId;
-        if (localId && localId !== 'undefined') {
-          navigate(`/movies/${localId}`, { state });
-        }
-      } else {
-        const targetId = movie.refId || movie.tmdbId;
-        if (targetId && targetId !== 'undefined') {
-          navigate(`/movies/tmdb-${targetId}?source=${movie.source || 'tmdb'}&mediaType=${movie.mediaType || 'movie'}`, { state });
-        }
-      }
-    }, 10);
+  const handleMovieClick = (movie) => {
+    setSelectedCardId(movie._id || movie.refId);
   };
 
   // When in local mode or empty query, filters are already processed server-side.
@@ -497,6 +466,7 @@ const Movies = () => {
               userFavourites={userFavs}
               userTags={userTags}
               onClick={handleMovieClick}
+              highlighted={(movie._id || movie.refId) === selectedCardId}
             />
           ))}
         </div>

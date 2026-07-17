@@ -4,12 +4,11 @@ import api, { getProxiedImageUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import CastCard from '../components/CastCard';
 import { Search, RotateCcw, Loader2, User } from 'lucide-react';
+import { useRestorePageState } from '../context/NavigationHistoryContext';
 
 const Cast = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const restoredState = location.state?.fromPage;
-  const restoredRef = useRef(!!restoredState);
 
   const { user, refreshUser } = useAuth();
   const [castList, setCastList] = useState([]);
@@ -18,14 +17,25 @@ const Cast = () => {
   const [importingCast, setImportingCast] = useState(false);
   const [importError, setImportError] = useState(null);
 
-  // Search/Filters State
-  const [searchQuery, setSearchQuery] = useState(restoredState?.q || '');
-  const [genderFilter, setGenderFilter] = useState(restoredState?.gender || '');
-  const [roleFilter, setRoleFilter] = useState(restoredState?.role || '');
-  const [searchMode, setSearchMode] = useState(restoredState?.searchMode || 'tmdb');
+  // Navigation History State Restoration
+  const [pageState, setPageState] = useRestorePageState('cast', {
+    currentPage: 1,
+    searchQuery: '',
+    genderFilter: '',
+    roleFilter: '',
+    searchMode: 'tmdb',
+    selectedCardId: null
+  }, loading);
 
-  // Pagination State
-  const [currentPage, setCurrentPage] = useState(restoredState?.page || 1);
+  const { currentPage, searchQuery, genderFilter, roleFilter, searchMode, selectedCardId } = pageState;
+
+  const setCurrentPage = (val) => setPageState(prev => ({ ...prev, currentPage: typeof val === 'function' ? val(prev.currentPage) : val }));
+  const setSearchQuery = (val) => setPageState(prev => ({ ...prev, searchQuery: typeof val === 'function' ? val(prev.searchQuery) : val }));
+  const setGenderFilter = (val) => setPageState(prev => ({ ...prev, genderFilter: typeof val === 'function' ? val(prev.genderFilter) : val }));
+  const setRoleFilter = (val) => setPageState(prev => ({ ...prev, roleFilter: typeof val === 'function' ? val(prev.roleFilter) : val }));
+  const setSearchMode = (val) => setPageState(prev => ({ ...prev, searchMode: typeof val === 'function' ? val(prev.searchMode) : val }));
+  const setSelectedCardId = (val) => setPageState(prev => ({ ...prev, selectedCardId: typeof val === 'function' ? val(prev.selectedCardId) : val }));
+
   const [totalPages, setTotalPages] = useState(1);
   const [totalCasts, setTotalCasts] = useState(0);
 
@@ -37,20 +47,6 @@ const Cast = () => {
   useEffect(() => {
     refreshUser();
   }, []);
-
-  const [scrollRestored, setScrollRestored] = useState(false);
-
-  useEffect(() => {
-    if (!loading && restoredState?.scrollY && !scrollRestored) {
-      setScrollRestored(true);
-      setTimeout(() => {
-        window.scrollTo({
-          top: restoredState.scrollY,
-          behavior: 'instant'
-        });
-      }, 100);
-    }
-  }, [loading, restoredState, scrollRestored]);
 
   const fetchCastData = async (page = 1) => {
     setLoading(true);
@@ -79,8 +75,11 @@ const Cast = () => {
     }
   };
 
+  const isInitialMountRef = useRef(true);
+
   // Trigger loading when currentPage changes
   useEffect(() => {
+    if (isInitialMountRef.current) return;
     if (searchMode === 'local' || !searchQuery) {
       fetchCastData(currentPage);
     }
@@ -88,8 +87,8 @@ const Cast = () => {
 
   // When filters or search queries change, reset page to 1
   useEffect(() => {
-    if (restoredRef.current) {
-      restoredRef.current = false;
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
       if (searchMode === 'local' || !searchQuery) {
         fetchCastData(currentPage);
       } else {
@@ -197,38 +196,8 @@ const Cast = () => {
     }
   };
 
-  const handleCastClick = async (member) => {
-    const state = {
-      fromPage: {
-        page: currentPage,
-        q: searchQuery,
-        gender: genderFilter,
-        role: roleFilter,
-        searchMode: searchMode,
-        scrollY: window.scrollY
-      }
-    };
-
-    // First replace the state of the current catalogue page in history before navigating away
-    navigate(location.pathname + location.search, {
-      replace: true,
-      state
-    });
-
-    const isLocal = !member.source || member.source === 'local';
-    setTimeout(() => {
-      if (isLocal) {
-        const localId = member._id || member.refId;
-        if (localId && localId !== 'undefined') {
-          navigate(`/cast/${localId}`, { state });
-        }
-      } else {
-        const targetId = member.refId || member.tmdbId;
-        if (targetId && targetId !== 'undefined') {
-          navigate(`/cast/tmdb-${targetId}?source=${member.source || 'tmdb'}`, { state });
-        }
-      }
-    }, 10);
+  const handleCastClick = (member) => {
+    setSelectedCardId(member._id || member.refId);
   };
 
   // When in local mode or empty query, filters are already processed server-side.
@@ -443,6 +412,7 @@ const Cast = () => {
               cast={member} 
               userFavourites={userFavs}
               onClick={handleCastClick}
+              highlighted={(member._id || member.refId) === selectedCardId}
             />
           ))}
         </div>

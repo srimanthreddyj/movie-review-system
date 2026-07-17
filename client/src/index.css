@@ -577,3 +577,25 @@ a:hover {
     opacity: 1;
   }
 }
+
+/* Card highlight return pulse */
+@keyframes highlight-pulse {
+  0% {
+    box-shadow: 0 0 0 3px var(--accent-color);
+    transform: scale(1.02);
+  }
+  70% {
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.2);
+    transform: scale(1.01);
+  }
+  100% {
+    box-shadow: none;
+    transform: scale(1);
+  }
+}
+
+.card-highlighted {
+  animation: highlight-pulse 2s cubic-bezier(0.25, 1, 0.5, 1) forwards;
+  border-color: var(--accent-color) !important;
+  z-index: 10;
+}

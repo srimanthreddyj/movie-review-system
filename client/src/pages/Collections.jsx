@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Trash2, FolderPlus, Plus, X, Film, User, 
   Video, Edit3, AlertCircle, Check, FolderOpen 
@@ -8,12 +8,14 @@ import api from '../services/api';
 import MovieCard from '../components/MovieCard';
 import CastCard from '../components/CastCard';
 import ClipCard from '../components/ClipCard';
+import { useRestorePageState, useNavigationHistory } from '../context/NavigationHistoryContext';
 import './Collections.css';
 
 const Collections = () => {
   const location = useLocation();
-  const restoredState = location.state?.fromCollections;
-  const restoredRef = useRef(!!restoredState);
+  const navigate = useNavigate();
+  const { navigationType } = useNavigationHistory();
+  const isPop = navigationType === 'POP';
 
   const [collections, setCollections] = useState([]);
   const [selectedCol, setSelectedCol] = useState(null);
@@ -24,9 +26,6 @@ const Collections = () => {
   const [error, setError] = useState('');
   const [successMsg, setSuccessMsg] = useState('');
 
-  // Tab State for Detail View
-  const [activeTab, setActiveTab] = useState(restoredState?.activeTab || 'movie'); // 'movie' | 'cast' | 'clip'
-
   // Modal States
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [showEditModal, setShowEditModal] = useState(false);
@@ -36,16 +35,29 @@ const Collections = () => {
   const [colDesc, setColDesc] = useState('');
   const [colCover, setColCover] = useState('');
 
-  // Pagination States
-  const [currentPage, setCurrentPage] = useState(restoredState?.currentPage || 1);
-  const [itemPage, setItemPage] = useState(restoredState?.itemPage || 1);
+  // Navigation History State Restoration
+  const [pageState, setPageState] = useRestorePageState('collections', {
+    selectedCollectionId: null,
+    activeTab: 'movie',
+    currentPage: 1,
+    itemPage: 1
+  }, loading || detailLoading);
+
+  const { selectedCollectionId, activeTab, currentPage, itemPage } = pageState;
+
+  const setSelectedCollectionId = (val) => setPageState(prev => ({ ...prev, selectedCollectionId: typeof val === 'function' ? val(prev.selectedCollectionId) : val }));
+  const setActiveTab = (val) => setPageState(prev => ({ ...prev, activeTab: typeof val === 'function' ? val(prev.activeTab) : val }));
+  const setCurrentPage = (val) => setPageState(prev => ({ ...prev, currentPage: typeof val === 'function' ? val(prev.currentPage) : val }));
+  const setItemPage = (val) => setPageState(prev => ({ ...prev, itemPage: typeof val === 'function' ? val(prev.itemPage) : val }));
   
   // Custom Confirmation Dialog State
   const [itemToRemove, setItemToRemove] = useState(null);
 
+  const isInitialMountRef = useRef(true);
+
   // Reset item page when active collection or tab changes
   useEffect(() => {
-    if (restoredRef.current) {
+    if (isInitialMountRef.current) {
       return;
     }
     setItemPage(1);
@@ -55,21 +67,6 @@ const Collections = () => {
     fetchCollections();
   }, []);
 
-  const [scrollRestored, setScrollRestored] = useState(false);
-
-  useEffect(() => {
-    if (!detailLoading && !loading && restoredState?.scrollY && !scrollRestored && selectedCol) {
-      setScrollRestored(true);
-      restoredRef.current = false;
-      setTimeout(() => {
-        window.scrollTo({
-          top: restoredState.scrollY,
-          behavior: 'instant'
-        });
-      }, 100);
-    }
-  }, [loading, detailLoading, restoredState, scrollRestored, selectedCol]);
-
   const fetchCollections = async () => {
     try {
       setLoading(true);
@@ -77,8 +74,8 @@ const Collections = () => {
       const response = await api.get('/collections');
       setCollections(response.data);
       
-      if (restoredState?.selectedCollectionId) {
-        const matchedCol = response.data.find(c => c._id === restoredState.selectedCollectionId);
+      if (selectedCollectionId) {
+        const matchedCol = response.data.find(c => c._id === selectedCollectionId);
         if (matchedCol) {
           setSelectedCol(matchedCol);
           fetchCollectionDetail(matchedCol._id);
@@ -89,6 +86,7 @@ const Collections = () => {
       setError('Could not load collections catalogue.');
     } finally {
       setLoading(false);
+      isInitialMountRef.current = false;
     }
   };
 
@@ -98,8 +96,9 @@ const Collections = () => {
       setError('');
       const response = await api.get(`/collections/${id}`);
       setSelectedCol(response.data);
+      setSelectedCollectionId(id);
       // Automatically focus first tab that has items, or default to movie, unless restoring
-      if (!restoredRef.current) {
+      if (!isPop) {
         const items = response.data.items || [];
         if (items.some(i => i.entityType === 'movie')) setActiveTab('movie');
         else if (items.some(i => i.entityType === 'cast')) setActiveTab('cast');
@@ -274,7 +273,7 @@ const Collections = () => {
         <div className="collection-details-view animate-fade-in">
           {/* Back Action Bar */}
           <div className="details-header-bar flex-between">
-            <button onClick={() => setSelectedCol(null)} className="btn btn-secondary flex-center" style={{ gap: '0.5rem' }}>
+            <button onClick={() => { setSelectedCol(null); setSelectedCollectionId(null); }} className="btn btn-secondary flex-center" style={{ gap: '0.5rem' }}>
               <ArrowLeft size={16} />
               <span>Back to Collections</span>
             </button>
@@ -340,16 +339,6 @@ const Collections = () => {
             const totalItemPages = Math.ceil(filteredItems.length / 12);
             const paginatedItems = filteredItems.slice((itemPage - 1) * 12, itemPage * 12);
             
-            const cardState = {
-              fromCollections: {
-                selectedCollectionId: selectedCol?._id,
-                activeTab,
-                currentPage,
-                itemPage,
-                scrollY: window.scrollY
-              }
-            };
-
             return (
               <>
                 <div className="grid-cards">
@@ -366,10 +355,18 @@ const Collections = () => {
 
                       {/* Render Component */}
                       {item.entityType === 'movie' && item.details && (
-                        <MovieCard movie={item.details} state={cardState} />
+                        <MovieCard 
+                          movie={item.details} 
+                          onClick={(movie) => setSelectedCardId(movie._id || movie.refId)}
+                          highlighted={(item.details._id || item.details.refId) === selectedCardId}
+                        />
                       )}
                       {item.entityType === 'cast' && item.details && (
-                        <CastCard cast={item.details} state={cardState} />
+                        <CastCard 
+                          cast={item.details} 
+                          onClick={(cast) => setSelectedCardId(cast._id || cast.refId)}
+                          highlighted={(item.details._id || item.details.refId) === selectedCardId}
+                        />
                       )}
                       {item.entityType === 'clip' && item.details && (
                         <ClipCard clip={item.details} />

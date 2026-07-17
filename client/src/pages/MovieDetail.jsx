@@ -8,12 +8,14 @@ import CastCard from '../components/CastCard';
 import ClipCard from '../components/ClipCard';
 import CommentSection from '../components/CommentSection';
 import { Film, Calendar, Globe, Star, Sparkles, Clock, AlertTriangle, ArrowLeft, Tag, FolderPlus, Heart, MessageSquare } from 'lucide-react';
+import { useNavigationHistory } from '../context/NavigationHistoryContext';
 
 const MovieDetail = () => {
   const { id } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { goBack, getBackLabel } = useNavigationHistory();
   
   const isExternal = id.startsWith('tmdb-');
   
@@ -320,47 +322,14 @@ const MovieDetail = () => {
 
 
       {/* Back button */}
-      {location.state?.fromCastDetail ? (
-        <Link 
-          to={`/cast/${location.state.fromCastDetail.castId}`} 
-          state={location.state}
-          className="back-link flex-center" 
-          style={{ justifyContent: 'flex-start', marginBottom: '1.5rem', gap: '0.25rem' }}
-        >
-          <ArrowLeft size={14} />
-          <span>Back to Cast profile</span>
-        </Link>
-      ) : location.state?.fromCollections ? (
-        <Link 
-          to="/collections" 
-          state={location.state}
-          className="back-link flex-center" 
-          style={{ justifyContent: 'flex-start', marginBottom: '1.5rem', gap: '0.25rem' }}
-        >
-          <ArrowLeft size={14} />
-          <span>Back to Collections</span>
-        </Link>
-      ) : location.state?.fromFavourites ? (
-        <Link 
-          to="/favourites" 
-          state={location.state}
-          className="back-link flex-center" 
-          style={{ justifyContent: 'flex-start', marginBottom: '1.5rem', gap: '0.25rem' }}
-        >
-          <ArrowLeft size={14} />
-          <span>Back to Favourites</span>
-        </Link>
-      ) : (
-        <Link 
-          to="/movies" 
-          state={location.state}
-          className="back-link flex-center" 
-          style={{ justifyContent: 'flex-start', marginBottom: '1.5rem', gap: '0.25rem' }}
-        >
-          <ArrowLeft size={14} />
-          <span>Back to Catalogue</span>
-        </Link>
-      )}
+      <button 
+        onClick={() => goBack('/movies')}
+        className="back-link flex-center" 
+        style={{ justifyContent: 'flex-start', marginBottom: '1.5rem', gap: '0.25rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+      >
+        <ArrowLeft size={14} />
+        <span>{getBackLabel('Back to Catalogue')}</span>
+      </button>
 
       {/* Banner / Poster Section */}
       <div className="detail-hero">

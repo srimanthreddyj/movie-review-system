@@ -6,22 +6,36 @@ import MovieCard from '../components/MovieCard';
 import CastCard from '../components/CastCard';
 import ClipCard from '../components/ClipCard';
 import { Heart, Film, Users, Video, AlertTriangle } from 'lucide-react';
+import { useRestorePageState } from '../context/NavigationHistoryContext';
 
 const Favourites = () => {
   const { refreshUser } = useAuth();
   const location = useLocation();
-  const restoredState = location.state?.fromFavourites;
-  const restoredRef = useRef(!!restoredState);
 
   const [favourites, setFavourites] = useState({ movies: [], cast: [], clips: [] });
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState(restoredState?.activeTab || 'movies'); // 'movies', 'cast', 'clips'
-  const [priorityFilter, setPriorityFilter] = useState(restoredState?.priorityFilter || ''); // '', 'High', 'Medium', 'Low'
-  const [currentPage, setCurrentPage] = useState(restoredState?.page || 1);
+
+  // Navigation History State Restoration
+  const [pageState, setPageState] = useRestorePageState('favourites', {
+    activeTab: 'movies',
+    priorityFilter: '',
+    currentPage: 1,
+    selectedCardId: null
+  }, loading);
+
+  const { activeTab, priorityFilter, currentPage, selectedCardId } = pageState;
+
+  const setActiveTab = (val) => setPageState(prev => ({ ...prev, activeTab: typeof val === 'function' ? val(prev.activeTab) : val }));
+  const setPriorityFilter = (val) => setPageState(prev => ({ ...prev, priorityFilter: typeof val === 'function' ? val(prev.priorityFilter) : val }));
+  const setCurrentPage = (val) => setPageState(prev => ({ ...prev, currentPage: typeof val === 'function' ? val(prev.currentPage) : val }));
+  const setSelectedCardId = (val) => setPageState(prev => ({ ...prev, selectedCardId: typeof val === 'function' ? val(prev.selectedCardId) : val }));
+
+  const isInitialMountRef = useRef(true);
 
   // Reset page when tab or priority changes
   useEffect(() => {
-    if (restoredRef.current) {
+    if (isInitialMountRef.current) {
+      isInitialMountRef.current = false;
       return;
     }
     setCurrentPage(1);
@@ -31,21 +45,6 @@ const Favourites = () => {
     fetchFavourites();
     refreshUser();
   }, []);
-
-  const [scrollRestored, setScrollRestored] = useState(false);
-
-  useEffect(() => {
-    if (!loading && restoredState?.scrollY && !scrollRestored) {
-      setScrollRestored(true);
-      restoredRef.current = false;
-      setTimeout(() => {
-        window.scrollTo({
-          top: restoredState.scrollY,
-          behavior: 'instant'
-        });
-      }, 100);
-    }
-  }, [loading, restoredState, scrollRestored]);
 
   const fetchFavourites = async () => {
     setLoading(true);
@@ -106,22 +105,14 @@ const Favourites = () => {
     const renderGrid = (list) => (
       <div className="grid-cards" style={{ marginBottom: '2.5rem' }}>
         {list.map((item) => {
-          const cardState = {
-            fromFavourites: {
-              activeTab,
-              priorityFilter,
-              page: currentPage,
-              scrollY: window.scrollY
-            }
-          };
-
           if (activeTab === 'movies' && item.details) {
             return (
               <MovieCard 
                 key={item._id} 
                 movie={item.details} 
                 userFavourites={favourites.movies}
-                state={cardState}
+                onClick={(movie) => setSelectedCardId(movie._id || movie.refId)}
+                highlighted={(item.details._id || item.details.refId) === selectedCardId}
               />
             );
           }
@@ -131,7 +122,8 @@ const Favourites = () => {
                 key={item._id} 
                 cast={item.details} 
                 userFavourites={favourites.cast}
-                state={cardState}
+                onClick={(cast) => setSelectedCardId(cast._id || cast.refId)}
+                highlighted={(item.details._id || item.details.refId) === selectedCardId}
               />
             );
           }

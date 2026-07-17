@@ -4,7 +4,7 @@ import { Film, Tv, Calendar } from 'lucide-react';
 import { getProxiedImageUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 
-const MovieCard = ({ movie, userTags = [], userFavourites = [], onClick, state }) => {
+const MovieCard = ({ movie, userTags = [], userFavourites = [], onClick, state, highlighted }) => {
   const { user } = useAuth();
   const { _id, refId, source, title, mediaType, releaseDate, posterUrl, genre = [] } = movie;
   
@@ -97,26 +97,10 @@ const MovieCard = ({ movie, userTags = [], userFavourites = [], onClick, state }
   );
 
   return (
-    <div className="card movie-card">
-      {isExternal ? (
-        onClick ? (
-          <div 
-            onClick={() => onClick && onClick(movie)} 
-            className="movie-card-link"
-            style={{ cursor: 'pointer', height: '100%', display: 'flex', flexDirection: 'column' }}
-          >
-            <CardContent />
-          </div>
-        ) : (
-          <Link to={linkTo} state={state} className="movie-card-link" style={!isValidId ? { pointerEvents: 'none' } : {}}>
-            <CardContent />
-          </Link>
-        )
-      ) : (
-        <Link to={linkTo} state={state} className="movie-card-link">
-          <CardContent />
-        </Link>
-      )}
+    <div className={`card movie-card ${highlighted ? 'card-highlighted' : ''}`}>
+      <Link to={linkTo} state={state} className="movie-card-link" style={!isValidId ? { pointerEvents: 'none' } : {}} onClick={() => onClick && onClick(movie)}>
+        <CardContent />
+      </Link>
 
       <style>{`
         .movie-card {

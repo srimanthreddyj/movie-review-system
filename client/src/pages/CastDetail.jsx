@@ -7,12 +7,14 @@ import MovieCard from '../components/MovieCard';
 import CommentSection from '../components/CommentSection';
 import AddToCollectionModal from '../components/AddToCollectionModal';
 import { ArrowLeft, User, Calendar, Globe, AlertTriangle, Video, FolderPlus, Sparkles, MessageSquare, Heart, Search } from 'lucide-react';
+import { useNavigationHistory } from '../context/NavigationHistoryContext';
 
 const CastDetail = () => {
   const { id } = useParams();
   const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
+  const { goBack, getBackLabel } = useNavigationHistory();
 
   const isExternal = id.startsWith('tmdb-');
 
@@ -179,37 +181,14 @@ const CastDetail = () => {
 
 
       {/* Back button */}
-      {location.state?.fromCollections ? (
-        <Link 
-          to="/collections" 
-          state={location.state}
-          className="back-link flex-center" 
-          style={{ justifyContent: 'flex-start', marginBottom: '1.5rem', gap: '0.25rem' }}
-        >
-          <ArrowLeft size={14} />
-          <span>Back to Collections</span>
-        </Link>
-      ) : location.state?.fromFavourites ? (
-        <Link 
-          to="/favourites" 
-          state={location.state}
-          className="back-link flex-center" 
-          style={{ justifyContent: 'flex-start', marginBottom: '1.5rem', gap: '0.25rem' }}
-        >
-          <ArrowLeft size={14} />
-          <span>Back to Favourites</span>
-        </Link>
-      ) : (
-        <Link 
-          to="/cast" 
-          state={location.state?.fromCastDirectory || location.state}
-          className="back-link flex-center" 
-          style={{ justifyContent: 'flex-start', marginBottom: '1.5rem', gap: '0.25rem' }}
-        >
-          <ArrowLeft size={14} />
-          <span>Back to Cast profiles</span>
-        </Link>
-      )}
+      <button 
+        onClick={() => goBack('/cast')}
+        className="back-link flex-center" 
+        style={{ justifyContent: 'flex-start', marginBottom: '1.5rem', gap: '0.25rem', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+      >
+        <ArrowLeft size={14} />
+        <span>{getBackLabel('Back to Cast profiles')}</span>
+      </button>
 
       {/* Main Profile Columns */}
       <div className="profile-grid">
