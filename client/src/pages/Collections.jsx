@@ -40,15 +40,19 @@ const Collections = () => {
     selectedCollectionId: null,
     activeTab: 'movie',
     currentPage: 1,
-    itemPage: 1
+    itemPage: 1,
+    colSearchQuery: '',
+    itemSearchQuery: ''
   }, loading || detailLoading);
 
-  const { selectedCollectionId, activeTab, currentPage, itemPage } = pageState;
+  const { selectedCollectionId, activeTab, currentPage, itemPage, colSearchQuery, itemSearchQuery } = pageState;
 
   const setSelectedCollectionId = (val) => setPageState(prev => ({ ...prev, selectedCollectionId: typeof val === 'function' ? val(prev.selectedCollectionId) : val }));
   const setActiveTab = (val) => setPageState(prev => ({ ...prev, activeTab: typeof val === 'function' ? val(prev.activeTab) : val }));
   const setCurrentPage = (val) => setPageState(prev => ({ ...prev, currentPage: typeof val === 'function' ? val(prev.currentPage) : val }));
   const setItemPage = (val) => setPageState(prev => ({ ...prev, itemPage: typeof val === 'function' ? val(prev.itemPage) : val }));
+  const setColSearchQuery = (val) => setPageState(prev => ({ ...prev, colSearchQuery: typeof val === 'function' ? val(prev.colSearchQuery) : val }));
+  const setItemSearchQuery = (val) => setPageState(prev => ({ ...prev, itemSearchQuery: typeof val === 'function' ? val(prev.itemSearchQuery) : val }));
   
   // Custom Confirmation Dialog State
   const [itemToRemove, setItemToRemove] = useState(null);
@@ -61,7 +65,15 @@ const Collections = () => {
       return;
     }
     setItemPage(1);
-  }, [selectedCol?._id, activeTab]);
+  }, [selectedCol?._id, activeTab, itemSearchQuery]);
+
+  // Reset current page when colSearchQuery changes
+  useEffect(() => {
+    if (isInitialMountRef.current) {
+      return;
+    }
+    setCurrentPage(1);
+  }, [colSearchQuery]);
 
   useEffect(() => {
     fetchCollections();
@@ -236,10 +248,22 @@ const Collections = () => {
     setShowEditModal(true);
   };
 
-  // Filter Items by activeTab
-  const filteredItems = selectedCol 
-    ? selectedCol.items.filter(item => item.entityType === activeTab)
-    : [];
+  // Filter Items by activeTab and search
+  const filteredItems = (() => {
+    if (!selectedCol) return [];
+    let items = selectedCol.items.filter(item => item.entityType === activeTab);
+    if (itemSearchQuery) {
+      const lowerQ = itemSearchQuery.toLowerCase();
+      items = items.filter(item => {
+        if (!item.details) return false;
+        if (activeTab === 'movie') return item.details.title?.toLowerCase().includes(lowerQ);
+        if (activeTab === 'cast') return item.details.name?.toLowerCase().includes(lowerQ);
+        if (activeTab === 'clip') return item.details.title?.toLowerCase().includes(lowerQ);
+        return false;
+      });
+    }
+    return items;
+  })();
 
   // Count helper
   const getTabCount = (type) => {
@@ -325,6 +349,17 @@ const Collections = () => {
               <Video size={15} style={{ marginRight: '0.375rem' }} />
               <span>Video Clips ({getTabCount('clip')})</span>
             </button>
+          </div>
+
+          <div className="search-box-row" style={{ marginBottom: '1.5rem', display: 'flex', justifyContent: 'center' }}>
+            <input 
+              type="text" 
+              placeholder={`Search in ${activeTab}s...`} 
+              value={itemSearchQuery}
+              onChange={(e) => setItemSearchQuery(e.target.value)}
+              className="form-input"
+              style={{ maxWidth: '400px' }}
+            />
           </div>
 
           {/* List of items under tab */}
@@ -453,6 +488,17 @@ const Collections = () => {
             </button>
           </div>
 
+          <div className="search-box-row" style={{ marginBottom: '1.5rem', display: 'flex' }}>
+            <input 
+              type="text" 
+              placeholder="Search collections..." 
+              value={colSearchQuery}
+              onChange={(e) => setColSearchQuery(e.target.value)}
+              className="form-input"
+              style={{ maxWidth: '400px' }}
+            />
+          </div>
+
           {collections.length === 0 ? (
             <div className="collections-empty-state flex-center">
               <FolderPlus size={48} className="empty-state-icon" />
@@ -468,8 +514,18 @@ const Collections = () => {
               </button>
             </div>
           ) : (() => {
-            const totalPages = Math.ceil(collections.length / 12);
-            const paginatedCollections = collections.slice((currentPage - 1) * 12, currentPage * 12);
+            const filteredCollections = collections.filter(c => c.name.toLowerCase().includes(colSearchQuery.toLowerCase()));
+            
+            if (filteredCollections.length === 0) {
+              return (
+                <div className="collections-empty-state flex-center">
+                  <h2>No matching collections found.</h2>
+                </div>
+              );
+            }
+            
+            const totalPages = Math.ceil(filteredCollections.length / 12);
+            const paginatedCollections = filteredCollections.slice((currentPage - 1) * 12, currentPage * 12);
             
             return (
               <>

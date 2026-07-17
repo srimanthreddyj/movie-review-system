@@ -20,15 +20,17 @@ const Favourites = () => {
     activeTab: 'movies',
     priorityFilter: '',
     currentPage: 1,
-    selectedCardId: null
+    selectedCardId: null,
+    searchQuery: ''
   }, loading);
 
-  const { activeTab, priorityFilter, currentPage, selectedCardId } = pageState;
+  const { activeTab, priorityFilter, currentPage, selectedCardId, searchQuery } = pageState;
 
   const setActiveTab = (val) => setPageState(prev => ({ ...prev, activeTab: typeof val === 'function' ? val(prev.activeTab) : val }));
   const setPriorityFilter = (val) => setPageState(prev => ({ ...prev, priorityFilter: typeof val === 'function' ? val(prev.priorityFilter) : val }));
   const setCurrentPage = (val) => setPageState(prev => ({ ...prev, currentPage: typeof val === 'function' ? val(prev.currentPage) : val }));
   const setSelectedCardId = (val) => setPageState(prev => ({ ...prev, selectedCardId: typeof val === 'function' ? val(prev.selectedCardId) : val }));
+  const setSearchQuery = (val) => setPageState(prev => ({ ...prev, searchQuery: typeof val === 'function' ? val(prev.searchQuery) : val }));
 
   const isInitialMountRef = useRef(true);
 
@@ -39,7 +41,7 @@ const Favourites = () => {
       return;
     }
     setCurrentPage(1);
-  }, [activeTab, priorityFilter]);
+  }, [activeTab, priorityFilter, searchQuery]);
 
   useEffect(() => {
     fetchFavourites();
@@ -64,6 +66,17 @@ const Favourites = () => {
     let filtered = [...items];
     if (priorityFilter) {
       filtered = filtered.filter(item => item.level === priorityFilter);
+    }
+    
+    if (searchQuery) {
+      const lowerQ = searchQuery.toLowerCase();
+      filtered = filtered.filter(item => {
+        if (!item.details) return false;
+        if (activeTab === 'movies') return item.details.title?.toLowerCase().includes(lowerQ);
+        if (activeTab === 'cast') return item.details.name?.toLowerCase().includes(lowerQ);
+        if (activeTab === 'clips') return item.details.title?.toLowerCase().includes(lowerQ);
+        return false;
+      });
     }
 
     // Sort priority: High -> Medium -> Low
@@ -269,6 +282,18 @@ const Favourites = () => {
           </button>
         </div>
       </header>
+
+      {/* Search Bar */}
+      <div className="search-box-row" style={{ marginBottom: '1.5rem', display: 'flex' }}>
+        <input 
+          type="text" 
+          placeholder={`Search saved ${activeTab}...`} 
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="form-input"
+          style={{ maxWidth: '400px' }}
+        />
+      </div>
 
       {/* Tabs */}
       <div className="tabs-container">
