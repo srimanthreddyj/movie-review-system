@@ -8,4 +8,7 @@ const adminOnly = require('../middleware/adminOnly');
 router.get('/', auth, adminOnly, settingsController.getSettings);
 router.put('/', auth, adminOnly, settingsController.updateSettings);
 
+// Maintenance scripts
+router.post('/cleanup/cast', auth, adminOnly, settingsController.cleanupDuplicateCast);
+
 module.exports = router;

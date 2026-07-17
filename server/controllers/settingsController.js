@@ -56,3 +56,29 @@ exports.updateSettings = async (req, res) => {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
+
+exports.cleanupDuplicateCast = async (req, res) => {
+  try {
+    const Movie = require('../models/Movie');
+    const movies = await Movie.find();
+    let fixed = 0;
+    for (let m of movies) {
+      const uniqueCast = [];
+      const castIds = new Set();
+      for (let c of m.cast) {
+        if (!castIds.has(c.castId.toString())) {
+          castIds.add(c.castId.toString());
+          uniqueCast.push(c);
+        }
+      }
+      if (uniqueCast.length !== m.cast.length) {
+        m.cast = uniqueCast;
+        await m.save();
+        fixed++;
+      }
+    }
+    res.json({ message: `Successfully cleaned up duplicate cast members in ${fixed} movies.` });
+  } catch (error) {
+    res.status(500).json({ message: 'Cleanup script failed', error: error.message });
+  }
+};

@@ -76,6 +76,20 @@ const Admin = () => {
     }
   };
 
+  const handleCleanupCast = async () => {
+    setLoading(true);
+    setMessage('Running database cleanup script...');
+    try {
+      const { data } = await api.post('/settings/cleanup/cast');
+      setMessage(`Cleanup complete: ${data.message}`);
+    } catch (err) {
+      console.error(err);
+      setMessage(err.response?.data?.message || 'Cleanup script failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSearch = async () => {
     if (!searchQuery.trim()) return;
     setLoading(true);
@@ -208,6 +222,29 @@ const Admin = () => {
           >
             {externalApisEnabled ? <Power size={18} /> : <PowerOff size={18} />}
             {externalApisEnabled ? 'APIs Enabled' : 'APIs Disabled'}
+          </button>
+        </div>
+      </div>
+
+      {/* Database Maintenance Tools */}
+      <div className="panel maintenance-zone" style={{ borderLeft: '4px solid #3b82f6', marginBottom: '2rem' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div>
+            <h2 style={{ color: '#3b82f6', display: 'flex', alignItems: 'center', gap: '0.5rem', margin: '0 0 0.5rem 0' }}>
+              <CheckCircle2 size={20} /> Database Maintenance
+            </h2>
+            <p className="panel-desc" style={{ margin: 0 }}>
+              Run maintenance scripts to clean up the database. E.g., fixing duplicate cast members resulting from multi-role imports.
+            </p>
+          </div>
+          <button 
+            onClick={handleCleanupCast}
+            disabled={loading}
+            className="btn-primary"
+            style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', backgroundColor: '#3b82f6', borderColor: 'transparent' }}
+          >
+            {loading ? <Loader2 className="animate-spin" size={18} /> : <CheckCircle2 size={18} />}
+            Cleanup Duplicate Cast
           </button>
         </div>
       </div>
