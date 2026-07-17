@@ -39,20 +39,25 @@ const Collections = () => {
   const [pageState, setPageState] = useRestorePageState('collections', {
     selectedCollectionId: null,
     activeTab: 'movie',
-    currentPage: 1,
     itemPage: 1,
+    currentPage: 1,
     colSearchQuery: '',
-    itemSearchQuery: ''
-  }, loading || detailLoading);
+    itemSearchQuery: '',
+    selectedCardId: null
+  }, loading);
 
-  const { selectedCollectionId, activeTab, currentPage, itemPage, colSearchQuery, itemSearchQuery } = pageState;
+  const { 
+    selectedCollectionId, activeTab, itemPage, currentPage, 
+    colSearchQuery, itemSearchQuery, selectedCardId
+  } = pageState;
 
   const setSelectedCollectionId = (val) => setPageState(prev => ({ ...prev, selectedCollectionId: typeof val === 'function' ? val(prev.selectedCollectionId) : val }));
   const setActiveTab = (val) => setPageState(prev => ({ ...prev, activeTab: typeof val === 'function' ? val(prev.activeTab) : val }));
-  const setCurrentPage = (val) => setPageState(prev => ({ ...prev, currentPage: typeof val === 'function' ? val(prev.currentPage) : val }));
   const setItemPage = (val) => setPageState(prev => ({ ...prev, itemPage: typeof val === 'function' ? val(prev.itemPage) : val }));
+  const setCurrentPage = (val) => setPageState(prev => ({ ...prev, currentPage: typeof val === 'function' ? val(prev.currentPage) : val }));
   const setColSearchQuery = (val) => setPageState(prev => ({ ...prev, colSearchQuery: typeof val === 'function' ? val(prev.colSearchQuery) : val }));
   const setItemSearchQuery = (val) => setPageState(prev => ({ ...prev, itemSearchQuery: typeof val === 'function' ? val(prev.itemSearchQuery) : val }));
+  const setSelectedCardId = (val) => setPageState(prev => ({ ...prev, selectedCardId: typeof val === 'function' ? val(prev.selectedCardId) : val }));
   
   // Custom Confirmation Dialog State
   const [itemToRemove, setItemToRemove] = useState(null);
