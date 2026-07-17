@@ -629,6 +629,7 @@ const Admin = () => {
             Create Movie
           </button>
         </form>
+      </div>
           </div>
         )}
       </div>
