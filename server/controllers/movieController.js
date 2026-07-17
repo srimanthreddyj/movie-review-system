@@ -99,7 +99,7 @@ const processCastList = async (rawCast, dataSource, onlyActresses = false) => {
   return processedCast;
 };
 
-// 1. Search External API (Database-First Caching & Merging)
+// 1. Search External API (Live TMDB with Local Metadata Mapping)
 exports.searchExternal = async (req, res) => {
   try {
     const query = req.query.q;
@@ -107,26 +107,7 @@ exports.searchExternal = async (req, res) => {
       return res.status(400).json({ message: 'Query parameter q is required' });
     }
 
-    // Step A: Search local database
-    const localMovies = await Movie.find({
-      $or: [
-        { title: { $regex: query, $options: 'i' } },
-        { originalTitle: { $regex: query, $options: 'i' } }
-      ]
-    }).limit(15);
-
-    const formattedLocal = localMovies.map(movie => ({
-      title: movie.title,
-      originalTitle: movie.originalTitle || '',
-      releaseDate: movie.releaseDate,
-      posterUrl: movie.posterUrl,
-      refId: movie._id.toString(),
-      source: 'local',
-      mediaType: movie.mediaType || 'movie',
-      synopsis: movie.synopsis || ''
-    }));
-
-    // Step B: Search TMDB/external sources via movieApiService
+    // Step A: Search TMDB/external sources via movieApiService
     let externalMovies = [];
     try {
       externalMovies = await movieApiService.searchMovies(query);
@@ -134,10 +115,19 @@ exports.searchExternal = async (req, res) => {
       console.warn('External search failed in controller:', err.message);
     }
 
-    // Step C: Merge and deduplicate
-    const filteredExternal = [];
-    for (const item of externalMovies) {
-      // Check if this external item is already in our DB by tmdbId, imdbId or exact title match
+    // Step B: Extract IDs and find matching local cached items
+    const tmdbIds = externalMovies.filter(m => m.source === 'tmdb').map(m => m.refId);
+    const imdbIds = externalMovies.filter(m => m.source === 'omdb').map(m => m.refId);
+
+    const localMovies = await Movie.find({
+      $or: [
+        { tmdbId: { $in: tmdbIds } },
+        { imdbId: { $in: imdbIds } }
+      ]
+    });
+
+    // Step C: Substitute external results with local versions if they exist
+    const combined = externalMovies.map(item => {
       let existingLocal = null;
       if (item.source === 'tmdb') {
         existingLocal = localMovies.find(m => m.tmdbId === item.refId);
@@ -145,23 +135,21 @@ exports.searchExternal = async (req, res) => {
         existingLocal = localMovies.find(m => m.imdbId === item.refId);
       }
 
-      // Fallback check by exact title
-      if (!existingLocal) {
-        existingLocal = localMovies.find(
-          m => m.title.toLowerCase().trim() === item.title.toLowerCase().trim()
-        );
-      }
-
       if (existingLocal) {
-        // If it is already in our database, it will be included in the formattedLocal list.
-        // Therefore, we skip adding it again as an external item.
-        continue;
-      } else {
-        filteredExternal.push(item);
+        return {
+          title: existingLocal.title,
+          originalTitle: existingLocal.originalTitle || '',
+          releaseDate: existingLocal.releaseDate,
+          posterUrl: existingLocal.posterUrl,
+          refId: existingLocal._id.toString(),
+          source: 'local',
+          mediaType: existingLocal.mediaType || 'movie',
+          synopsis: existingLocal.synopsis || ''
+        };
       }
-    }
+      return item;
+    });
 
-    const combined = [...formattedLocal, ...filteredExternal];
     res.json(combined);
   } catch (error) {
     res.status(500).json({ message: 'External search failed', error: error.message });
@@ -330,6 +318,10 @@ exports.getMovies = async (req, res) => {
       });
       const movieIds = assignments.map(a => a.entityId);
       query._id = { $in: movieIds };
+    } else if (req.user.role !== 'admin') {
+      // For standard users browsing the catalogue,
+      // only show system-synced popular items to prevent leaking other users' niche imports.
+      query.isPopular = true;
     }
 
     const pageNum = parseInt(page);
@@ -576,7 +568,7 @@ exports.previewExternalDetails = async (req, res) => {
   }
 };
 
-// 11. Autocomplete Search recommendations combining local and live TMDB multi-search results
+// 11. Autocomplete Search recommendations (Live TMDB multi-search with local mapping)
 exports.autocomplete = async (req, res) => {
   try {
     const query = req.query.q;
@@ -584,76 +576,49 @@ exports.autocomplete = async (req, res) => {
       return res.json([]);
     }
 
-    // 1. Local Search (Movies & Cast)
-    const localMoviesPromise = Movie.find({
-      $or: [
-        { title: { $regex: query, $options: 'i' } },
-        { originalTitle: { $regex: query, $options: 'i' } }
-      ]
-    }).limit(5);
+    // 1. External Search (TMDB Multi Search)
+    const externalResults = await movieApiService.searchExternalMulti(query);
 
-    const localCastPromise = Cast.find({
-      name: { $regex: query, $options: 'i' }
-    }).limit(5);
-
-    // 2. External Search (TMDB Multi Search)
-    const externalSearchPromise = movieApiService.searchExternalMulti(query);
-
-    const [localMovies, localCast, externalResults] = await Promise.all([
-      localMoviesPromise,
-      localCastPromise,
-      externalSearchPromise
+    // 2. Map TMDB IDs to Local Cache
+    const tmdbIds = externalResults.map(item => item.refId);
+    
+    const [localMovies, localCast] = await Promise.all([
+      Movie.find({ tmdbId: { $in: tmdbIds } }),
+      Cast.find({ tmdbId: { $in: tmdbIds } })
     ]);
 
-    // Format local results
-    const formattedLocalMovies = localMovies.map(movie => ({
-      title: movie.title,
-      mediaType: movie.mediaType || 'movie',
-      source: 'local',
-      refId: movie._id.toString(),
-      posterUrl: movie.posterUrl || '',
-      releaseDate: movie.releaseDate,
-      local: true
-    }));
-
-    const formattedLocalCast = localCast.map(person => ({
-      title: person.name,
-      mediaType: 'person',
-      source: 'local',
-      refId: person._id.toString(),
-      posterUrl: person.photoUrl || '',
-      releaseDate: null,
-      synopsis: person.knownFor || '',
-      local: true
-    }));
-
-    // Deduplicate external results against local ones using tmdbId/title/name
-    const localMovieTmdbIds = new Set(localMovies.map(m => m.tmdbId).filter(Boolean));
-    const localMovieTitles = new Set(localMovies.map(m => m.title.toLowerCase().trim()));
-    const localCastTmdbIds = new Set(localCast.map(c => c.tmdbId).filter(Boolean));
-    const localCastNames = new Set(localCast.map(c => c.name.toLowerCase().trim()));
-
-    const filteredExternal = externalResults.map(item => {
+    const combined = externalResults.map(item => {
       if (item.mediaType === 'movie' || item.mediaType === 'series') {
-        const isLocal = localMovieTmdbIds.has(item.refId) || localMovieTitles.has(item.title.toLowerCase().trim());
-        if (isLocal) return null;
+        const local = localMovies.find(m => m.tmdbId === item.refId);
+        if (local) {
+          return {
+            title: local.title,
+            mediaType: local.mediaType || 'movie',
+            source: 'local',
+            refId: local._id.toString(),
+            posterUrl: local.posterUrl || '',
+            releaseDate: local.releaseDate,
+            local: true
+          };
+        }
       } else if (item.mediaType === 'person') {
-        const isLocal = localCastTmdbIds.has(item.refId) || localCastNames.has(item.title.toLowerCase().trim());
-        if (isLocal) return null;
+        const local = localCast.find(c => c.tmdbId === item.refId);
+        if (local) {
+          return {
+            title: local.name,
+            mediaType: 'person',
+            source: 'local',
+            refId: local._id.toString(),
+            posterUrl: local.photoUrl || '',
+            releaseDate: null,
+            synopsis: local.knownFor || '',
+            local: true
+          };
+        }
       }
-      return {
-        title: item.title,
-        mediaType: item.mediaType,
-        source: item.source,
-        refId: item.refId,
-        posterUrl: item.posterUrl,
-        releaseDate: item.releaseDate,
-        synopsis: item.synopsis || '',
-        local: false
-      };
-    }).filter(Boolean);
+      return { ...item, local: false };
+    });
 
-    const combined = [...formattedLocalMovies, ...formattedLocalCast, ...filteredExternal];
     res.json(combined.slice(0, 15));
   } catch (error) {
     console.error('Autocomplete failed:', error);

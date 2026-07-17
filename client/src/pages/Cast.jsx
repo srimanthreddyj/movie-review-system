@@ -23,17 +23,15 @@ const Cast = () => {
     searchQuery: '',
     genderFilter: '',
     roleFilter: '',
-    searchMode: 'tmdb',
     selectedCardId: null
   }, loading);
 
-  const { currentPage, searchQuery, genderFilter, roleFilter, searchMode, selectedCardId } = pageState;
+  const { currentPage, searchQuery, genderFilter, roleFilter, selectedCardId } = pageState;
 
   const setCurrentPage = (val) => setPageState(prev => ({ ...prev, currentPage: typeof val === 'function' ? val(prev.currentPage) : val }));
   const setSearchQuery = (val) => setPageState(prev => ({ ...prev, searchQuery: typeof val === 'function' ? val(prev.searchQuery) : val }));
   const setGenderFilter = (val) => setPageState(prev => ({ ...prev, genderFilter: typeof val === 'function' ? val(prev.genderFilter) : val }));
   const setRoleFilter = (val) => setPageState(prev => ({ ...prev, roleFilter: typeof val === 'function' ? val(prev.roleFilter) : val }));
-  const setSearchMode = (val) => setPageState(prev => ({ ...prev, searchMode: typeof val === 'function' ? val(prev.searchMode) : val }));
   const setSelectedCardId = (val) => setPageState(prev => ({ ...prev, selectedCardId: typeof val === 'function' ? val(prev.selectedCardId) : val }));
 
   const [totalPages, setTotalPages] = useState(1);
@@ -55,7 +53,6 @@ const Cast = () => {
         page,
         limit: 12
       };
-      if (searchMode === 'local' && searchQuery) params.q = searchQuery;
       if (genderFilter) params.gender = genderFilter;
       if (roleFilter) params.knownFor = roleFilter;
 
@@ -80,7 +77,7 @@ const Cast = () => {
   // Trigger loading when currentPage changes
   useEffect(() => {
     if (isInitialMountRef.current) return;
-    if (searchMode === 'local' || !searchQuery) {
+    if (!searchQuery) {
       fetchCastData(currentPage);
     }
   }, [currentPage]);
@@ -89,7 +86,7 @@ const Cast = () => {
   useEffect(() => {
     if (isInitialMountRef.current) {
       isInitialMountRef.current = false;
-      if (searchMode === 'local' || !searchQuery) {
+      if (!searchQuery) {
         fetchCastData(currentPage);
       } else {
         handleSearch();
@@ -98,24 +95,17 @@ const Cast = () => {
     }
 
     if (currentPage === 1) {
-      if (searchMode === 'local' || !searchQuery) {
+      if (!searchQuery) {
         fetchCastData(1);
       }
     } else {
       setCurrentPage(1);
     }
-  }, [searchQuery, searchMode, genderFilter, roleFilter]);
-
-  const handleToggleSearchMode = (mode) => {
-    setSearchMode(mode);
-    setSearchQuery('');
-    setSuggestions([]);
-    setShowDropdown(false);
-  };
+  }, [searchQuery, genderFilter, roleFilter]);
 
   // Debounced search logic for autocomplete suggestions
   useEffect(() => {
-    if (searchMode !== 'tmdb' || searchQuery.trim().length < 2) {
+    if (searchQuery.trim().length < 2) {
       setSuggestions([]);
       setShowDropdown(false);
       return;
@@ -137,7 +127,7 @@ const Cast = () => {
     }, 400);
 
     return () => clearTimeout(timer);
-  }, [searchQuery, searchMode]);
+  }, [searchQuery]);
 
   // Click outside to close suggestion dropdown
   useEffect(() => {
@@ -161,7 +151,6 @@ const Cast = () => {
     setSearchQuery('');
     setGenderFilter('');
     setRoleFilter('');
-    setSearchMode('tmdb');
     setSuggestions([]);
     setShowDropdown(false);
     setCurrentPage(1);
@@ -169,11 +158,6 @@ const Cast = () => {
 
   const handleSearch = async (e) => {
     if (e) e.preventDefault();
-    if (searchMode === 'local') {
-      setCurrentPage(1);
-      fetchCastData(1);
-      return;
-    }
     if (!searchQuery.trim()) {
       fetchCastData(1);
       return;
@@ -200,9 +184,8 @@ const Cast = () => {
     setSelectedCardId(member._id || member.refId);
   };
 
-  // When in local mode or empty query, filters are already processed server-side.
   // When in live TMDB mode with search query, we filter TMDB results locally.
-  const filteredCast = searchMode === 'tmdb' && searchQuery
+  const filteredCast = searchQuery
     ? castList.filter((member) => {
         const matchesGender = genderFilter ? member.gender === genderFilter : true;
         const matchesRole = roleFilter ? (member.knownFor === roleFilter || member.knownForDepartment === roleFilter) : true;
@@ -252,69 +235,25 @@ const Cast = () => {
 
       {/* Filters Bar */}
       <section className="filters-section">
-        {/* Toggle between TMDB Live and Local Catalogue */}
-        <div className="search-mode-toggle flex-center" style={{ justifyContent: 'flex-start', marginBottom: '1.25rem', gap: '0.75rem', flexWrap: 'wrap' }}>
-          <span style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--text-secondary)' }}>Search Target:</span>
-          <div className="toggle-group" style={{ display: 'inline-flex', borderRadius: '20px', border: '1px solid var(--border-color)', overflow: 'hidden', padding: '2px', backgroundColor: 'var(--bg-tertiary)' }}>
-            <button
-              type="button"
-              onClick={() => handleToggleSearchMode('tmdb')}
-              className={`toggle-btn ${searchMode === 'tmdb' ? 'active' : ''}`}
-              style={{
-                padding: '0.375rem 1rem',
-                fontSize: '0.75rem',
-                borderRadius: '18px',
-                border: 'none',
-                background: searchMode === 'tmdb' ? 'var(--accent-color)' : 'transparent',
-                color: searchMode === 'tmdb' ? 'white' : 'var(--text-secondary)',
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              Live TMDB
-            </button>
-            <button
-              type="button"
-              onClick={() => handleToggleSearchMode('local')}
-              className={`toggle-btn ${searchMode === 'local' ? 'active' : ''}`}
-              style={{
-                padding: '0.375rem 1rem',
-                fontSize: '0.75rem',
-                borderRadius: '18px',
-                border: 'none',
-                background: searchMode === 'local' ? 'var(--accent-color)' : 'transparent',
-                color: searchMode === 'local' ? 'white' : 'var(--text-secondary)',
-                fontWeight: 600,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              Local Catalogue
-            </button>
-          </div>
-        </div>
 
         <form onSubmit={handleSearch} className="search-bar-container" style={{ position: 'relative' }}>
           <Search size={18} className="search-icon" />
           <input
             type="text"
             className="form-input search-input"
-            placeholder={searchMode === 'tmdb' ? "Search TMDB & Catalog by name, nationality..." : "Filter local profiles by name, nationality..."}
+            placeholder="Search TMDB & Catalog by name, nationality..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onFocus={() => { if (suggestions.length > 0) setShowDropdown(true); }}
           />
           {isSearchingSuggestions && (
-            <div style={{ position: 'absolute', right: searchMode === 'tmdb' ? '110px' : '20px', top: '50%', transform: 'translateY(-50%)', zIndex: 5 }}>
+            <div style={{ position: 'absolute', right: '110px', top: '50%', transform: 'translateY(-50%)', zIndex: 5 }}>
               <Loader2 size={16} className="spinner" style={{ color: 'var(--accent-color)' }} />
             </div>
           )}
-          {searchMode === 'tmdb' && (
-            <button type="submit" className="btn btn-primary search-submit-btn">
-              Search
-            </button>
-          )}
+          <button type="submit" className="btn btn-primary search-submit-btn">
+            Search
+          </button>
 
           {showDropdown && suggestions.length > 0 && (
             <div className="search-suggestions-dropdown">
@@ -345,7 +284,7 @@ const Cast = () => {
                     <span className="badge-outline-sm type-person">
                       person
                     </span>
-                    {item.source === 'local' ? (
+                    {userFavs.some(f => f.entityId === (item._id || item.refId) || f.entityId?._id === (item._id || item.refId)) ? (
                       <span className="badge-success-sm">Saved</span>
                     ) : (
                       <span className="badge-secondary-sm">TMDB</span>

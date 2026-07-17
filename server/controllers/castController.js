@@ -32,6 +32,8 @@ exports.getCasts = async (req, res) => {
       });
       const castIds = assignments.map(a => a.entityId);
       query._id = { $in: castIds };
+    } else if (req.user.role !== 'admin') {
+      query.isPopular = true;
     }
 
     const pageNum = parseInt(page);
@@ -230,23 +232,7 @@ exports.searchExternalCast = async (req, res) => {
       return res.status(400).json({ message: 'Query parameter q is required' });
     }
 
-    // 1. Search local database cast profiles
-    const localCast = await Cast.find({
-      name: { $regex: query, $options: 'i' }
-    }).limit(15);
-
-    const formattedLocal = localCast.map(c => ({
-      name: c.name,
-      tmdbId: c.tmdbId,
-      photoUrl: c.photoUrl,
-      gender: c.gender,
-      knownForDepartment: c.knownFor || 'Acting',
-      knownFor: '',
-      source: 'local',
-      refId: c._id.toString()
-    }));
-
-    // 2. Search TMDB external profiles
+    // 1. Search TMDB external profiles
     const movieApiService = require('../services/movieApiService');
     let externalResults = [];
     try {
@@ -255,37 +241,41 @@ exports.searchExternalCast = async (req, res) => {
       console.warn('External cast search failed:', err.message);
     }
 
+    // 2. Fetch local equivalents to substitute
+    const tmdbIds = externalResults.filter(c => c.tmdbId).map(c => c.tmdbId);
+    const localCast = await Cast.find({ tmdbId: { $in: tmdbIds } });
+
     // 3. Merge and deduplicate
-    const filteredExternal = [];
-    for (const item of externalResults) {
+    const combined = externalResults.map(item => {
       let existingLocal = null;
       if (item.tmdbId) {
         existingLocal = localCast.find(c => c.tmdbId === item.tmdbId);
       }
-      if (!existingLocal) {
-        existingLocal = localCast.find(
-          c => c.name.toLowerCase().trim() === item.name.toLowerCase().trim()
-        );
-      }
 
       if (existingLocal) {
-        // Already in local, skip adding to avoid duplication
-        continue;
-      } else {
-        filteredExternal.push({
-          name: item.name,
-          tmdbId: item.tmdbId,
-          photoUrl: item.photoUrl,
-          gender: item.gender,
-          knownForDepartment: item.knownForDepartment || 'Acting',
-          knownFor: item.knownFor || '',
-          source: item.source || 'tmdb',
-          refId: item.tmdbId
-        });
+        return {
+          name: existingLocal.name,
+          tmdbId: existingLocal.tmdbId,
+          photoUrl: existingLocal.photoUrl,
+          gender: existingLocal.gender,
+          knownForDepartment: existingLocal.knownFor || 'Acting',
+          knownFor: '',
+          source: 'local',
+          refId: existingLocal._id.toString()
+        };
       }
-    }
-
-    const combined = [...formattedLocal, ...filteredExternal];
+      
+      return {
+        name: item.name,
+        tmdbId: item.tmdbId,
+        photoUrl: item.photoUrl,
+        gender: item.gender,
+        knownForDepartment: item.knownForDepartment || 'Acting',
+        knownFor: item.knownFor || '',
+        source: item.source || 'tmdb',
+        refId: item.tmdbId
+      };
+    });
     res.json(combined);
   } catch (error) {
     res.status(500).json({ message: 'External cast search failed', error: error.message });
