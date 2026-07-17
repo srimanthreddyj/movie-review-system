@@ -105,13 +105,23 @@ const mapGender = (g) => {
   return 'Unspecified';
 };
 
-// Helper: Prioritise actresses and apply cap
+// Helper: Prioritise actresses and apply cap and deduplicate
 const filterAndCapCast = (castArray) => {
   const maxLimit = parseInt(process.env.MAX_CAST_IMPORT_LIMIT || '8');
   
+  // Deduplicate by tmdbId or name, keeping the first role (Actor prioritized)
+  const uniqueMap = new Map();
+  castArray.forEach(c => {
+    const key = c.tmdbId || c.name;
+    if (!uniqueMap.has(key)) {
+      uniqueMap.set(key, { ...c });
+    }
+  });
+  const uniqueCastArray = Array.from(uniqueMap.values());
+  
   // Separate Actors and Crew
-  const actors = castArray.filter(c => c.role === 'Actor' || c.role === 'Actress');
-  const crew = castArray.filter(c => c.role !== 'Actor' && c.role !== 'Actress');
+  const actors = uniqueCastArray.filter(c => c.role.includes('Actor') || c.role.includes('Actress'));
+  const crew = uniqueCastArray.filter(c => !c.role.includes('Actor') && !c.role.includes('Actress'));
 
   // Prioritise Actresses (gender === 'Female' first)
   const femaleActors = actors.filter(a => a.gender === 'Female');
