@@ -127,10 +127,13 @@ const FilePreviewModal = ({ file, onClose }) => {
             align-items: center;
             justify-content: center;
             height: 100%;
+            background-color: #000;
           }
           .preview-iframe {
-            height: 100%;
-            min-height: 50dvh;
+            width: 100%;
+            height: auto;
+            aspect-ratio: 16 / 9;
+            min-height: unset;
           }
         }
       `}</style>
