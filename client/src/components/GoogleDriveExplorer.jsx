@@ -2,7 +2,7 @@
 import { useState, useMemo } from 'react';
 import { 
   Folder, File, FileText, Image as ImageIcon, Video, FileAudio, 
-  ChevronRight, ChevronDown, Search, ArrowLeft, ArrowUpRight 
+  ChevronRight, ChevronDown, Search, ArrowLeft, ArrowUpRight, Menu
 } from 'lucide-react';
 import FilePreviewModal from './FilePreviewModal';
 
@@ -67,6 +67,7 @@ const GoogleDriveExplorer = ({ tree, onClose }) => {
   const [expandedFolders, setExpandedFolders] = useState(new Set([tree[0]?.id]));
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPreview, setSelectedPreview] = useState(null);
+  const [showSidebar, setShowSidebar] = useState(false);
 
   const toggleFolder = (folderId) => {
     const newSet = new Set(expandedFolders);
@@ -114,33 +115,90 @@ const GoogleDriveExplorer = ({ tree, onClose }) => {
           border-right: 1px solid var(--border-color);
           border-bottom: none;
         }
+        .mobile-sidebar-toggle {
+          display: none;
+        }
+        .mobile-sidebar-overlay {
+          display: none;
+        }
         @media (max-width: 768px) {
+          .drive-explorer {
+            height: 90dvh !important;
+            border-radius: 0 !important;
+            border: none !important;
+          }
           .drive-main-content {
             flex-direction: column;
+            position: relative;
           }
           .drive-sidebar {
-            width: 100% !important;
-            max-height: 180px;
-            border-right: none !important;
-            border-bottom: 1px solid var(--border-color) !important;
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            width: 260px !important;
+            z-index: 10;
+            background-color: var(--bg-primary);
+            box-shadow: 2px 0 8px rgba(0,0,0,0.5);
+            transition: transform 0.3s ease;
+            max-height: none;
+            border-right: 1px solid var(--border-color) !important;
+            border-bottom: none !important;
+          }
+          .drive-sidebar.hidden {
+            transform: translateX(-100%);
+            box-shadow: none;
+          }
+          .mobile-sidebar-toggle {
+            display: flex;
+          }
+          .mobile-sidebar-overlay {
+            display: block;
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: rgba(0,0,0,0.5);
+            z-index: 5;
+          }
+          .mobile-sidebar-overlay.hidden {
+            display: none;
           }
           .drive-header-wrapper {
             flex-direction: column !important;
-            align-items: flex-start !important;
+            align-items: stretch !important;
             gap: 1rem !important;
+          }
+          .drive-header-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
           }
           .drive-search-wrapper {
             width: 100% !important;
+          }
+          .drive-grid {
+            padding: 1rem !important;
+          }
+          .file-card {
+             padding: 0.75rem !important;
+          }
+          .hide-on-mobile {
+            display: none;
           }
         }
       `}</style>
       {/* Header */}
       <div className="drive-header drive-header-wrapper flex-between" style={{ padding: '1rem', borderBottom: '1px solid var(--border-color)', backgroundColor: 'var(--bg-secondary)' }}>
-        <div className="flex-center" style={{ gap: '1rem' }}>
-          <button onClick={onClose} className="btn flex-center" style={{ gap: '0.25rem', padding: '0.25rem 0.5rem' }}>
-            <ArrowLeft size={16} /> Exit
-          </button>
-          <h3 style={{ margin: 0, fontSize: '1.25rem' }}>Drive Explorer</h3>
+        <div className="drive-header-top">
+          <div className="flex-center" style={{ gap: '0.75rem' }}>
+            <button onClick={onClose} className="btn flex-center" style={{ gap: '0.25rem', padding: '0.35rem 0.6rem' }}>
+              <ArrowLeft size={16} /> <span className="hide-on-mobile">Exit</span>
+            </button>
+            <button onClick={() => setShowSidebar(!showSidebar)} className="btn flex-center mobile-sidebar-toggle" style={{ padding: '0.35rem 0.6rem', background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: '4px' }}>
+              <Menu size={16} />
+            </button>
+            <h3 style={{ margin: 0, fontSize: '1.25rem' }}>Drive Explorer</h3>
+          </div>
         </div>
         <div className="search-bar-container drive-search-wrapper" style={{ margin: 0, width: '300px' }}>
           <Search size={16} className="search-icon" />
@@ -157,8 +215,9 @@ const GoogleDriveExplorer = ({ tree, onClose }) => {
 
       {/* Main Content */}
       <div className="drive-main-content" style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
+        <div className={`mobile-sidebar-overlay ${!showSidebar ? 'hidden' : ''}`} onClick={() => setShowSidebar(false)} />
         {/* Sidebar Tree */}
-        <div className="drive-sidebar" style={{ overflowY: 'auto', padding: '1rem', backgroundColor: 'var(--bg-tertiary)' }}>
+        <div className={`drive-sidebar ${!showSidebar ? 'hidden' : ''}`} style={{ overflowY: 'auto', padding: '1rem', backgroundColor: 'var(--bg-tertiary)' }}>
           <div style={{ fontSize: '0.75rem', fontWeight: 'bold', color: 'var(--text-muted)', marginBottom: '0.5rem', textTransform: 'uppercase' }}>Folders</div>
           {tree.map(node => (
             <TreeNode 

@@ -46,16 +46,21 @@ const FilePreviewModal = ({ file, onClose }) => {
       const previewUrl = `https://drive.google.com/file/d/${file.id}/preview`;
       
       return (
-        <iframe 
-          className="preview-iframe"
-          src={previewUrl} 
-          title={file.name}
-          style={{ width: '100%', border: 'none' }}
-          allow="autoplay; fullscreen; picture-in-picture"
-          allowFullScreen
-          webkitallowfullscreen="true"
-          mozallowfullscreen="true"
-        />
+        <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
+          <div style={{ padding: '0.75rem', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)', textAlign: 'center', fontSize: '0.85rem', borderBottom: '1px solid var(--border-color)' }}>
+            Preview blocked or not loading? <a href={file.webViewLink} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary-color)', textDecoration: 'underline', marginLeft: '0.5rem', fontWeight: '500' }}>Open in Google Drive</a>
+          </div>
+          <iframe 
+            className="preview-iframe"
+            src={previewUrl} 
+            title={file.name}
+            style={{ width: '100%', flex: 1, border: 'none' }}
+            allow="autoplay; fullscreen; picture-in-picture"
+            allowFullScreen
+            webkitallowfullscreen="true"
+            mozallowfullscreen="true"
+          />
+        </div>
       );
     }
     if (isAudio) {
@@ -128,12 +133,12 @@ const FilePreviewModal = ({ file, onClose }) => {
             justify-content: center;
             height: 100%;
             background-color: #000;
+            width: 100%;
           }
           .preview-iframe {
             width: 100%;
-            height: auto;
-            aspect-ratio: 16 / 9;
-            min-height: unset;
+            height: 100%;
+            min-height: 100%;
           }
         }
       `}</style>
