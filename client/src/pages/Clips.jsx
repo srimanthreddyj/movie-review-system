@@ -625,6 +625,7 @@ const Clips = () => {
                   placeholder="https://www.youtube.com/watch?v=..."
                   value={formData.url}
                   onChange={handleInputChange}
+                  autoComplete="off"
                   required 
                 />
               </div>

@@ -20,8 +20,21 @@ export const AuthProvider = ({ children }) => {
         setUser(response.data);
       } catch (error) {
         console.error('Failed to restore authentication session:', error);
-        localStorage.removeItem('token');
-        setUser(null);
+        // Only remove the token if the backend explicitly rejects it as invalid (401).
+        // This prevents logging users out during temporary network drops or VPN switching.
+        if (error.response && error.response.status === 401) {
+          localStorage.removeItem('token');
+          setUser(null);
+        } else {
+          // If it's a network error (VPN switch), preserve the session using the token payload
+          try {
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            setUser({ _id: payload.id, role: payload.role, name: 'User (Offline)', offline: true });
+          } catch (e) {
+            localStorage.removeItem('token');
+            setUser(null);
+          }
+        }
       } finally {
         setLoading(false);
       }
