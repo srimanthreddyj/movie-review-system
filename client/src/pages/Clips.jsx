@@ -2,7 +2,8 @@ import React, { useEffect, useState, useRef } from 'react';
 import api, { getProxiedImageUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import ClipCard from '../components/ClipCard';
-import { Video, Plus, Search, RotateCcw, X, AlertCircle } from 'lucide-react';
+import { Video, Plus, Search, RotateCcw, X, AlertCircle, CloudDownload } from 'lucide-react';
+import GoogleDriveExplorer from '../components/GoogleDriveExplorer';
 
 const Clips = () => {
   const { user, isAdmin } = useAuth();
@@ -58,6 +59,13 @@ const Clips = () => {
   const [showCastDropdown, setShowCastDropdown] = useState(false);
   const movieSearchRef = useRef(null);
   const castSearchRef = useRef(null);
+
+  // Drive Import State
+  const [showDriveUrlModal, setShowDriveUrlModal] = useState(false);
+  const [driveUrl, setDriveUrl] = useState('');
+  const [loadingDrive, setLoadingDrive] = useState(false);
+  const [driveError, setDriveError] = useState('');
+  const [driveTree, setDriveTree] = useState(null);
 
   useEffect(() => {
     const handleClickOutside = (e) => {
@@ -440,15 +448,42 @@ const Clips = () => {
   };
 
 
+  const handleImportDrive = async (e) => {
+    e.preventDefault();
+    if (!driveUrl) {
+      setDriveError('Please enter a Google Drive URL.');
+      return;
+    }
+    setDriveError('');
+    setLoadingDrive(true);
+    try {
+      const res = await api.post('/cliproom/import-drive-folder', { url: driveUrl });
+      setDriveTree(res.data.tree);
+      setShowDriveUrlModal(false);
+    } catch (err) {
+      setDriveError(err.response?.data?.message || err.message || 'Failed to import folder.');
+    } finally {
+      setLoadingDrive(false);
+    }
+  };
 
   return (
     <div className="container clips-container">
+      {driveTree && (
+        <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999, backgroundColor: 'rgba(0,0,0,0.8)', padding: '2rem' }}>
+          <GoogleDriveExplorer tree={driveTree} onClose={() => setDriveTree(null)} />
+        </div>
+      )}
       <header className="catalogue-header flex-between" style={{ flexWrap: 'wrap', gap: '1rem', marginBottom: '2rem' }}>
         <div>
           <h1>Video Clip Room</h1>
           <p style={{ margin: 0 }}>Watch trailers, BTS interviews, and scenes mapped to your catalogue.</p>
         </div>
         <div className="flex-center" style={{ gap: '0.5rem' }}>
+          <button onClick={() => { setShowDriveUrlModal(true); setDriveUrl(''); setDriveError(''); }} className="btn flex-center" style={{ gap: '0.375rem', backgroundColor: '#3b82f6', color: 'white' }}>
+            <CloudDownload size={16} />
+            <span>Browse Google Drive</span>
+          </button>
           <button onClick={() => {
             setEditingClipId(null);
             setSelectedMovie(null);
@@ -1072,6 +1107,47 @@ const Clips = () => {
           background-color: var(--bg-tertiary);
         }
       `}</style>
+      {/* Drive URL Modal */}
+      {showDriveUrlModal && (
+        <div className="modal-backdrop flex-center" onClick={() => setShowDriveUrlModal(false)} style={{ zIndex: 10000 }}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header flex-between">
+              <span className="modal-title">Browse Google Drive Folder</span>
+              <button onClick={() => setShowDriveUrlModal(false)} className="modal-close-btn flex-center">
+                <X size={20} />
+              </button>
+            </div>
+            {driveError && (
+              <div className="alert alert-error flex-center" style={{ gap: '0.5rem', margin: '1rem' }}>
+                <AlertCircle size={16} />
+                <span>{driveError}</span>
+              </div>
+            )}
+            <form onSubmit={handleImportDrive} className="modal-form">
+              <div className="form-group">
+                <label className="form-label">Shared Folder URL</label>
+                <input 
+                  type="url" 
+                  className="form-input" 
+                  placeholder="https://drive.google.com/drive/folders/..."
+                  value={driveUrl}
+                  onChange={e => setDriveUrl(e.target.value)}
+                  required 
+                />
+                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '0.5rem' }}>
+                  Ensure the folder sharing permissions are set to "Anyone with the link".
+                </p>
+              </div>
+              <div className="modal-actions flex-between">
+                <button type="button" onClick={() => setShowDriveUrlModal(false)} className="btn btn-secondary">Cancel</button>
+                <button type="submit" className="btn btn-primary flex-center" disabled={loadingDrive} style={{ gap: '0.5rem' }}>
+                  {loadingDrive ? 'Loading Folder...' : 'Explore Folder'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

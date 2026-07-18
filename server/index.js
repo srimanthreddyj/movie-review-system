@@ -46,7 +46,7 @@ app.use('/api/tags', require('./routes/tagsRoutes'));
 app.use('/api/comments', require('./routes/commentsRoutes'));
 app.use('/api/settings', require('./routes/settingsRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
-
+app.use('/api/cliproom', require('./routes/driveRoutes'));
 // Basic health check route
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'CineTrack API is running' });
