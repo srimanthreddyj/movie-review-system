@@ -40,7 +40,22 @@ const FilePreviewModal = ({ file, onClose }) => {
       );
     }
 
-    if (isVideo || isPdf || isGoogleDoc) {
+    if (isVideo) {
+      return (
+        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000' }}>
+          <video 
+            controls 
+            playsInline 
+            style={{ width: '100%', maxHeight: '100%', objectFit: 'contain' }}
+          >
+            <source src={file.webContentLink} type={file.mimeType} />
+            Your browser does not support the video element.
+          </video>
+        </div>
+      );
+    }
+
+    if (isPdf || isGoogleDoc) {
       // Use iframe to show webViewLink (Google's native preview player)
       // Construct the preview URL explicitly using the file ID to avoid framing errors
       const previewUrl = `https://drive.google.com/file/d/${file.id}/preview`;
