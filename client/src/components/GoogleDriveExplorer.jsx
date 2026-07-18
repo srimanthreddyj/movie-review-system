@@ -123,7 +123,12 @@ const GoogleDriveExplorer = ({ tree, onClose }) => {
         }
         @media (max-width: 768px) {
           .drive-explorer {
-            height: 90dvh !important;
+            height: 100dvh !important;
+            width: 100vw !important;
+            position: fixed !important;
+            top: 0 !important;
+            left: 0 !important;
+            z-index: 99999 !important;
             border-radius: 0 !important;
             border: none !important;
           }
@@ -244,7 +249,7 @@ const GoogleDriveExplorer = ({ tree, onClose }) => {
             </div>
           )}
 
-          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: '1rem' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(130px, 1fr))', gap: '1rem' }}>
             {displayedItems.map(item => (
               <div 
                 key={item.id} 
@@ -257,28 +262,35 @@ const GoogleDriveExplorer = ({ tree, onClose }) => {
                   cursor: 'pointer',
                   backgroundColor: 'var(--bg-secondary)',
                   transition: 'transform 0.2s, box-shadow 0.2s',
-                  textAlign: 'center'
+                  textAlign: 'center',
+                  minWidth: 0
                 }}
                 onClick={() => handleSelectNode(item)}
                 onMouseEnter={(e) => e.currentTarget.style.transform = 'translateY(-2px)'}
                 onMouseLeave={(e) => e.currentTarget.style.transform = 'translateY(0)'}
               >
-                <div style={{ marginBottom: '0.75rem', display: 'flex', justifyContent: 'center' }}>
+                <div style={{ marginBottom: '0.75rem', display: 'flex', justifyContent: 'center', width: '100%' }}>
                   {item.thumbnailLink ? (
-                    <img 
-                      src={item.thumbnailLink.replace(/=s\d+/, '=s400')} 
-                      alt={item.name} 
-                      style={{ width: '60px', height: '60px', objectFit: 'cover', borderRadius: '4px', backgroundColor: 'var(--bg-tertiary)' }} 
-                      referrerPolicy="no-referrer"
-                      onError={(e) => {
-                        e.target.style.display = 'none';
-                        e.target.nextSibling.style.display = 'block';
-                      }}
-                    />
-                  ) : null}
-                  <div style={{ display: item.thumbnailLink ? 'none' : 'block' }}>
-                    {getFileIcon(item.mimeType, 48)}
-                  </div>
+                    <div style={{ width: '100%', aspectRatio: '16/9', overflow: 'hidden', borderRadius: '4px', backgroundColor: 'var(--bg-tertiary)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                      <img 
+                        src={item.thumbnailLink.replace(/=s\d+/, '=s400')} 
+                        alt={item.name} 
+                        style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                        referrerPolicy="no-referrer"
+                        onError={(e) => {
+                          e.target.style.display = 'none';
+                          e.target.nextSibling.style.display = 'block';
+                        }}
+                      />
+                      <div style={{ display: 'none' }}>
+                        {getFileIcon(item.mimeType, 32)}
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ width: '100%', aspectRatio: '16/9', overflow: 'hidden', borderRadius: '4px', backgroundColor: 'var(--bg-tertiary)', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                      {getFileIcon(item.mimeType, 32)}
+                    </div>
+                  )}
                 </div>
                 <div style={{ fontSize: '0.85rem', fontWeight: '500', width: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={item.name}>
                   {item.name}
