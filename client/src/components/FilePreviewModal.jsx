@@ -106,7 +106,7 @@ const FilePreviewModal = ({ file, onClose }) => {
           border-radius: 8px;
         }
         .preview-iframe {
-          height: 80vh;
+          height: 80dvh;
         }
         .preview-modal-body {
           padding: 0;
@@ -130,7 +130,7 @@ const FilePreviewModal = ({ file, onClose }) => {
           }
           .preview-iframe {
             height: 100%;
-            min-height: 50vh;
+            min-height: 50dvh;
           }
         }
       `}</style>
