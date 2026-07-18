@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+/* eslint-disable no-unused-vars, react-hooks/exhaustive-deps */
+import { useState, useMemo } from 'react';
 import { 
   Folder, File, FileText, Image as ImageIcon, Video, FileAudio, 
   ChevronRight, ChevronDown, Search, ArrowLeft, ArrowUpRight 

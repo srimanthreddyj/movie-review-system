@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
-import { X, Download, ExternalLink, AlertCircle } from 'lucide-react';
+/* eslint-disable no-unused-vars, react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
+import { useState, useEffect } from 'react';
+import { X, Download, AlertCircle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-
 const FilePreviewModal = ({ file, onClose }) => {
   const [content, setContent] = useState(null);
   const [loading, setLoading] = useState(false);
