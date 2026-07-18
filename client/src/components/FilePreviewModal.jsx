@@ -51,7 +51,10 @@ const FilePreviewModal = ({ file, onClose }) => {
           src={previewUrl} 
           title={file.name}
           style={{ width: '100%', border: 'none' }}
-          allow="autoplay; fullscreen"
+          allow="autoplay; fullscreen; picture-in-picture"
+          allowFullScreen
+          webkitallowfullscreen="true"
+          mozallowfullscreen="true"
         />
       );
     }
