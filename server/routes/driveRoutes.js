@@ -78,4 +78,13 @@ router.post('/import-drive-folder', async (req, res) => {
   }
 });
 
+router.get('/stream/:id', (req, res) => {
+  const fileId = req.params.id;
+  if (!process.env.GOOGLE_DRIVE_API_KEY) {
+    return res.status(500).json({ message: 'Google Drive API key not configured on server' });
+  }
+  const streamUrl = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media&key=${process.env.GOOGLE_DRIVE_API_KEY}&acknowledgeAbuse=true`;
+  res.redirect(streamUrl);
+});
+
 module.exports = router;

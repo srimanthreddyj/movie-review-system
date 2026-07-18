@@ -41,6 +41,8 @@ const FilePreviewModal = ({ file, onClose }) => {
     }
 
     if (isVideo) {
+      const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const streamUrl = `${baseURL}/cliproom/stream/${file.id}`;
       return (
         <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000' }}>
           <video 
@@ -48,7 +50,7 @@ const FilePreviewModal = ({ file, onClose }) => {
             playsInline 
             style={{ width: '100%', maxHeight: '100%', objectFit: 'contain' }}
           >
-            <source src={file.webContentLink} type={file.mimeType} />
+            <source src={streamUrl} type={file.mimeType} />
             Your browser does not support the video element.
           </video>
         </div>
