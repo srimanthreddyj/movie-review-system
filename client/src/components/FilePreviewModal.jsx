@@ -48,7 +48,7 @@ const FilePreviewModal = ({ file, onClose }) => {
       return (
         <div style={{ width: '100%', height: '100%', display: 'flex', flexDirection: 'column' }}>
           <div style={{ padding: '0.75rem', backgroundColor: 'var(--bg-tertiary)', color: 'var(--text-primary)', textAlign: 'center', fontSize: '0.85rem', borderBottom: '1px solid var(--border-color)' }}>
-            Preview blocked or not loading? <a href={file.webViewLink} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary-color)', textDecoration: 'underline', marginLeft: '0.5rem', fontWeight: '500' }}>Open in Google Drive</a>
+            Cannot view full screen? <a href={file.webViewLink} target="_blank" rel="noopener noreferrer" style={{ color: 'var(--primary-color)', textDecoration: 'underline', marginLeft: '0.5rem', fontWeight: '500' }}>Open directly in Google Drive</a>
           </div>
           <iframe 
             className="preview-iframe"
