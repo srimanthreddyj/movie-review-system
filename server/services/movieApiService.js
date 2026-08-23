@@ -1,4 +1,4 @@
-const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent';
+const GEMINI_API_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.6-flash:generateContent';
 const { isExternalApiEnabled } = require('../controllers/settingsController');
 
 // Helper: Fetch with timeout using AbortController
@@ -21,7 +21,7 @@ const queryGemini = async (prompt) => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('Gemini API Key missing');
 
-  const models = ['gemini-flash-latest', 'gemini-2.5-flash', 'gemini-2.0-flash'];
+  const models = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-flash-latest', 'gemini-1.5-flash'];
   let lastError;
   for (const model of models) {
     try {
