@@ -2,8 +2,9 @@ import React, { useEffect, useState, useRef } from 'react';
 import api, { getProxiedImageUrl } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import ClipCard from '../components/ClipCard';
-import { Video, Plus, Search, RotateCcw, X, AlertCircle, CloudDownload } from 'lucide-react';
+import { Video, Plus, Search, RotateCcw, X, AlertCircle, CloudDownload, UploadCloud, Link as LinkIcon } from 'lucide-react';
 import GoogleDriveExplorer from '../components/GoogleDriveExplorer';
+import axios from 'axios';
 
 const Clips = () => {
   const { user, isAdmin } = useAuth();
@@ -32,6 +33,11 @@ const Clips = () => {
   const [editingClipId, setEditingClipId] = useState(null);
   const [userFavs, setUserFavs] = useState([]);
 
+  // File Upload State
+  const [uploadMode, setUploadMode] = useState('link'); // 'link' or 'upload'
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [uploadProgress, setUploadProgress] = useState(0);
+
   // Form Fields
   const [formData, setFormData] = useState({
     title: '',
@@ -41,6 +47,9 @@ const Clips = () => {
     movieId: '',
     castInvolved: []
   });
+
+  // Track the original b2:// key for existing B2-hosted clips (to avoid corrupting URL on edit)
+  const [editingB2Key, setEditingB2Key] = useState(null);
 
   // Selected Cast & Search States
   const [selectedCast, setSelectedCast] = useState([]);
@@ -275,6 +284,15 @@ const Clips = () => {
       castInvolved: clip.castInvolved ? clip.castInvolved.map(c => typeof c === 'object' ? c._id : c) : []
     });
 
+    // If this is a B2 hosted clip, preserve the original b2:// key so we don't overwrite it with the signed URL
+    if (clip.isB2 && clip.b2Key) {
+      setEditingB2Key(clip.b2Key);
+      setUploadMode('upload'); // Show upload UI so user knows it's a file-based clip
+    } else {
+      setEditingB2Key(null);
+      setUploadMode('link');
+    }
+
     // Populate selected movie safely
     if (clip.movieId && typeof clip.movieId === 'object') {
       setSelectedMovie({
@@ -356,8 +374,16 @@ const Clips = () => {
 
   const handleAddClip = async (e) => {
     e.preventDefault();
-    if (!formData.title || !formData.url) {
-      setFormError('Please fill in all required fields.');
+    if (!formData.title) {
+      setFormError('Please fill in the title.');
+      return;
+    }
+    if (uploadMode === 'link' && !formData.url && !editingClipId) {
+      setFormError('Please provide a video URL.');
+      return;
+    }
+    if (uploadMode === 'upload' && !selectedFile && !editingClipId) {
+      setFormError('Please select an MP4 file to upload.');
       return;
     }
 
@@ -365,6 +391,41 @@ const Clips = () => {
     setFormLoading(true);
 
     try {
+      let finalUrl = formData.url;
+      let finalB2Size = 0;
+
+      // Handle Direct B2 Upload
+      if (uploadMode === 'upload' && selectedFile) {
+        setUploadProgress(1); // Indicate start
+        
+        // 1. Get presigned URL
+        const uploadRes = await api.get('/clips/upload-url', {
+          params: {
+            fileName: selectedFile.name,
+            fileType: selectedFile.type,
+            fileSize: selectedFile.size
+          }
+        });
+        
+        const { uploadUrl, fileKey, size } = uploadRes.data;
+
+        // 2. Upload file directly to B2 using the presigned URL
+        await axios.put(uploadUrl, selectedFile, {
+          headers: { 'Content-Type': selectedFile.type },
+          onUploadProgress: (progressEvent) => {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            setUploadProgress(percentCompleted);
+          }
+        });
+
+        finalUrl = fileKey;
+        finalB2Size = size;
+      } else if (uploadMode === 'upload' && !selectedFile && editingClipId && editingB2Key) {
+        // Editing a B2 clip without uploading a new file — preserve the original b2:// key
+        finalUrl = editingB2Key;
+        finalB2Size = 0; // Don't change size tracking
+      }
+
       let finalMovieId = formData.movieId || null;
       
       // Resolve external movie to local ID (auto-import) if selected
@@ -410,6 +471,8 @@ const Clips = () => {
 
       const finalFormData = {
         ...formData,
+        url: finalUrl,
+        b2FileSize: finalB2Size,
         movieId: finalMovieId,
         castInvolved: resolvedCastIds
       };
@@ -433,6 +496,10 @@ const Clips = () => {
         movieId: '',
         castInvolved: []
       });
+      setSelectedFile(null);
+      setUploadProgress(0);
+      setUploadMode('link');
+      setEditingB2Key(null);
       setSelectedMovie(null);
       setMovieSearchQuery('');
       setMovieSearchResults([]);
@@ -652,17 +719,64 @@ const Clips = () => {
               </div>
 
               <div className="form-group">
-                <label className="form-label">Video URL (YouTube link preferred) *</label>
-                <input 
-                  type="url" 
-                  name="url"
-                  className="form-input" 
-                  placeholder="https://www.youtube.com/watch?v=..."
-                  value={formData.url}
-                  onChange={handleInputChange}
-                  autoComplete="off"
-                  required 
-                />
+                <label className="form-label">Video Source *</label>
+                <div className="flex-center" style={{ gap: '1rem', marginBottom: '1rem', justifyContent: 'flex-start' }}>
+                  <button 
+                    type="button" 
+                    className={`btn ${uploadMode === 'link' ? 'btn-primary' : 'btn-secondary'} flex-center`}
+                    onClick={() => setUploadMode('link')}
+                    style={{ gap: '0.375rem', padding: '0.5rem 1rem' }}
+                  >
+                    <LinkIcon size={16} /> Link URL
+                  </button>
+                  <button 
+                    type="button" 
+                    className={`btn ${uploadMode === 'upload' ? 'btn-primary' : 'btn-secondary'} flex-center`}
+                    onClick={() => setUploadMode('upload')}
+                    style={{ gap: '0.375rem', padding: '0.5rem 1rem' }}
+                  >
+                    <UploadCloud size={16} /> Upload MP4
+                  </button>
+                </div>
+
+                {uploadMode === 'link' ? (
+                  <input 
+                    type="url" 
+                    name="url"
+                    className="form-input" 
+                    placeholder="https://www.youtube.com/watch?v=..."
+                    value={formData.url}
+                    onChange={handleInputChange}
+                    autoComplete="off"
+                    required={uploadMode === 'link' && !editingClipId}
+                  />
+                ) : (
+                  <div>
+                    {editingB2Key && (
+                      <div style={{ fontSize: '0.8rem', color: '#10b981', backgroundColor: 'rgba(16,185,129,0.1)', border: '1px solid rgba(16,185,129,0.3)', borderRadius: '6px', padding: '0.5rem 0.75rem', marginBottom: '0.5rem', display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
+                        <span>✅</span>
+                        <span>Existing hosted video is preserved. Select a new file only if you want to replace it.</span>
+                      </div>
+                    )}
+                    <input 
+                      type="file" 
+                      accept="video/mp4"
+                      className="form-input" 
+                      onChange={(e) => setSelectedFile(e.target.files[0])}
+                      required={uploadMode === 'upload' && !editingClipId && !editingB2Key}
+                      style={{ padding: '0.375rem', backgroundColor: 'var(--bg-secondary)', color: 'var(--text-primary)' }}
+                    />
+                    <small style={{ color: 'var(--text-muted)' }}>Max file size recommended: 100MB (MP4 only)</small>
+                    
+                    {uploadProgress > 0 && uploadProgress <= 100 && (
+                      <div style={{ marginTop: '0.75rem', width: '100%', backgroundColor: 'var(--bg-tertiary)', borderRadius: '4px', overflow: 'hidden', height: '12px' }}>
+                        <div style={{ width: `${uploadProgress}%`, height: '100%', backgroundColor: 'var(--accent-color)', transition: 'width 0.2s', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff', fontSize: '10px' }}>
+                          {uploadProgress}%
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* Movie/TV Series Search autocomplete */}

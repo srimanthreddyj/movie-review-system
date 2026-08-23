@@ -96,6 +96,21 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
             <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.5 19A3.5 3.5 0 0 0 21 15.5c0-2.79-2.54-4.5-5-4.5-.42-1.89-1.74-3.5-4-3.5-3.04 0-5.5 2-5.5 5 0 .28.02.56.06.83A3.5 3.5 0 0 0 3 16.5c0 1.93 1.57 3.5 3.5 3.5Z"/></svg>
             <span style={{ fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Google Drive Video</span>
           </div>
+        ) : clip.isB2 ? (
+          <div className="card-img clip-thumbnail flex-center" style={{
+            width: '100%',
+            height: '100%',
+            backgroundColor: '#111',
+            color: '#ffffff',
+            flexDirection: 'column',
+            gap: '0.5rem',
+            position: 'absolute',
+            top: 0,
+            left: 0
+          }}>
+            <Play size={32} />
+            <span style={{ fontSize: '0.7rem', fontWeight: '700', letterSpacing: '0.05em', textTransform: 'uppercase' }}>Hosted Video</span>
+          </div>
         ) : (
           <img src={thumbnailUrl} alt={title} className="card-img clip-thumbnail" />
         )}
@@ -182,7 +197,29 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
               </button>
             </div>
             <div className="video-iframe-wrapper">
-              {videoId ? (
+              {clip.isB2 ? (
+                url && !url.startsWith('b2://') ? (
+                  <video
+                    src={url}
+                    controls
+                    autoPlay
+                    className="video-iframe"
+                    style={{ backgroundColor: '#000' }}
+                  />
+                ) : (
+                  <div className="unsupported-video flex-center">
+                    <span>Video link has expired or failed to load. Please refresh the page and try again.</span>
+                  </div>
+                )
+              ) : (url && url.toLowerCase().endsWith('.mp4') && !url.startsWith('b2://')) ? (
+                <video
+                  src={url}
+                  controls
+                  autoPlay
+                  className="video-iframe"
+                  style={{ backgroundColor: '#000' }}
+                />
+              ) : videoId ? (
                 <iframe
                   src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
                   title={title}

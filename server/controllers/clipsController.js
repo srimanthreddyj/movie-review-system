@@ -10,15 +10,15 @@ const crypto = require('crypto');
 
 // Initialize B2 S3 Client
 const b2Config = {
-  endpoint: process.env.B2_ENDPOINT || 'https://s3.us-west-004.backblazeb2.com',
-  region: process.env.B2_REGION || 'us-west-004',
+  endpoint: process.env.B2_ENDPOINT || 'https://s3.us-east-005.backblazeb2.com',
+  region: process.env.B2_REGION || 'us-east-005',
   credentials: {
-    accessKeyId: process.env.B2_KEY_ID || '005830cba81eb640000000001',
-    secretAccessKey: process.env.B2_APP_KEY || 'K005wYv/OgxQ8z3yJ7UN/01YyWTcWUs'
+    accessKeyId: process.env.B2_KEY_ID,
+    secretAccessKey: process.env.B2_APP_KEY
   }
 };
 const s3Client = new S3Client(b2Config);
-const B2_BUCKET = process.env.B2_BUCKET_NAME || 'moviebuzz-clips';
+const B2_BUCKET = process.env.B2_BUCKET_NAME || 'moviebuzz';
 
 // Max free tier limit: 10GB. We cap at 9GB (90%)
 const MAX_B2_BYTES = 9 * 1024 * 1024 * 1024;
@@ -30,6 +30,7 @@ const signClip = async (clip) => {
   const clipObj = typeof clip.toObject === 'function' ? clip.toObject() : clip;
   if (clipObj.url && clipObj.url.startsWith('b2://')) {
     const fileKey = clipObj.url.replace('b2://', '');
+    clipObj.b2Key = clipObj.url; // Preserve original b2:// key for frontend edits
     try {
       const command = new GetObjectCommand({
         Bucket: B2_BUCKET,
@@ -39,6 +40,7 @@ const signClip = async (clip) => {
       clipObj.isB2 = true;
     } catch (err) {
       console.error('Failed to sign B2 URL:', err);
+      // Keep b2Key set; url stays as b2:// to signal failure
     }
   }
   return clipObj;

@@ -13,6 +13,11 @@ router.get('/', auth, clipsController.getClips);
 // @access  Private
 router.post('/', auth, clipsController.addClip);
 
+// @route   GET /api/clips/upload-url
+// @desc    Get a presigned S3 URL for Backblaze B2 upload
+// @access  Private
+router.get('/upload-url', auth, clipsController.getUploadUrl);
+
 // @route   PUT /api/clips/:id
 // @desc    Update an existing clip (owner or admin only)
 // @access  Private
