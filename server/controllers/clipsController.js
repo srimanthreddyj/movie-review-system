@@ -3,6 +3,47 @@ const Movie = require('../models/Movie');
 const Cast = require('../models/Cast');
 const User = require('../models/User');
 const TagAssignment = require('../models/TagAssignment');
+const B2Usage = require('../models/B2Usage');
+const { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
+const { getSignedUrl } = require('@aws-sdk/s3-request-presigner');
+const crypto = require('crypto');
+
+// Initialize B2 S3 Client
+const b2Config = {
+  endpoint: process.env.B2_ENDPOINT || 'https://s3.us-west-004.backblazeb2.com',
+  region: process.env.B2_REGION || 'us-west-004',
+  credentials: {
+    accessKeyId: process.env.B2_KEY_ID || '005830cba81eb640000000001',
+    secretAccessKey: process.env.B2_APP_KEY || 'K005wYv/OgxQ8z3yJ7UN/01YyWTcWUs'
+  }
+};
+const s3Client = new S3Client(b2Config);
+const B2_BUCKET = process.env.B2_BUCKET_NAME || 'moviebuzz-clips';
+
+// Max free tier limit: 10GB. We cap at 9GB (90%)
+const MAX_B2_BYTES = 9 * 1024 * 1024 * 1024;
+
+
+// Helper to sign B2 URL for a clip
+const signClip = async (clip) => {
+  if (!clip) return clip;
+  const clipObj = typeof clip.toObject === 'function' ? clip.toObject() : clip;
+  if (clipObj.url && clipObj.url.startsWith('b2://')) {
+    const fileKey = clipObj.url.replace('b2://', '');
+    try {
+      const command = new GetObjectCommand({
+        Bucket: B2_BUCKET,
+        Key: fileKey,
+      });
+      clipObj.url = await getSignedUrl(s3Client, command, { expiresIn: 7200 });
+      clipObj.isB2 = true;
+    } catch (err) {
+      console.error('Failed to sign B2 URL:', err);
+    }
+  }
+  return clipObj;
+};
+exports.signClip = signClip;
 
 // Get all clips with filtering and pagination
 exports.getClips = async (req, res) => {
@@ -53,8 +94,10 @@ exports.getClips = async (req, res) => {
 
     const total = await Clip.countDocuments(filter);
 
+    const clipsList = await Promise.all(clips.map(c => signClip(c)));
+
     res.json({
-      clips,
+      clips: clipsList,
       page: pageNum,
       totalPages: Math.ceil(total / limitNum),
       totalClips: total
@@ -64,10 +107,54 @@ exports.getClips = async (req, res) => {
   }
 };
 
+// Get presigned URL for upload
+exports.getUploadUrl = async (req, res) => {
+  try {
+    const { fileName, fileType, fileSize } = req.query;
+    
+    if (!fileName || !fileType || !fileSize) {
+      return res.status(400).json({ message: 'Missing file details' });
+    }
+
+    const sizeNum = parseInt(fileSize, 10);
+
+    // Check usage
+    let usage = await B2Usage.findOne({ singleton: 'b2_usage' });
+    if (!usage) {
+      usage = new B2Usage({ singleton: 'b2_usage', totalBytesUsed: 0 });
+      await usage.save();
+    }
+
+    if (usage.totalBytesUsed + sizeNum > MAX_B2_BYTES) {
+      return res.status(403).json({ message: 'Free tier storage limit reached (90%). Cannot upload more clips.' });
+    }
+
+    const uniqueId = crypto.randomBytes(8).toString('hex');
+    const safeName = fileName.replace(/[^a-zA-Z0-9.-]/g, '_');
+    const key = `clips/${uniqueId}-${safeName}`;
+
+    const command = new PutObjectCommand({
+      Bucket: B2_BUCKET,
+      Key: key,
+      ContentType: fileType
+    });
+
+    const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 300 });
+
+    res.json({
+      uploadUrl,
+      fileKey: `b2://${key}`,
+      size: sizeNum
+    });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to generate upload URL', error: error.message });
+  }
+};
+
 // Add a new clip
 exports.addClip = async (req, res) => {
   try {
-    const { movieId, title, url, description, clipType, castInvolved } = req.body;
+    const { movieId, title, url, description, clipType, castInvolved, b2FileSize } = req.body;
 
     if (!title || !url) {
       return res.status(400).json({ message: 'Title and URL are required' });
@@ -96,10 +183,19 @@ exports.addClip = async (req, res) => {
       description,
       clipType: clipType || 'trailer',
       castInvolved: castInvolved || [],
-      addedBy: req.user.id
+      addedBy: req.user.id,
+      b2FileSize: b2FileSize ? parseInt(b2FileSize, 10) : 0
     });
 
     await clip.save();
+
+    // Track usage
+    if (url && url.startsWith('b2://') && b2FileSize) {
+      let usage = await B2Usage.findOne({ singleton: 'b2_usage' });
+      if (!usage) usage = new B2Usage({ singleton: 'b2_usage', totalBytesUsed: 0 });
+      usage.totalBytesUsed += parseInt(b2FileSize, 10);
+      await usage.save();
+    }
 
     // Populate references before returning
     const populatedClip = await Clip.findById(clip._id)
@@ -107,7 +203,7 @@ exports.addClip = async (req, res) => {
       .populate('castInvolved', 'name photoUrl gender')
       .populate('addedBy', 'name');
 
-    res.status(201).json(populatedClip);
+    res.status(201).json(await signClip(populatedClip));
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
@@ -117,7 +213,7 @@ exports.addClip = async (req, res) => {
 exports.updateClip = async (req, res) => {
   try {
     const { id } = req.params;
-    const { movieId, title, url, description, clipType, castInvolved } = req.body;
+    const { movieId, title, url, description, clipType, castInvolved, b2FileSize } = req.body;
 
     const clip = await Clip.findById(id);
     if (!clip) {
@@ -149,19 +245,50 @@ exports.updateClip = async (req, res) => {
       clip.castInvolved = castInvolved;
     }
 
+    const oldUrl = clip.url;
+    const oldB2Size = clip.b2FileSize;
+
     if (title) clip.title = title;
     if (url) clip.url = url;
     if (description !== undefined) clip.description = description;
     if (clipType) clip.clipType = clipType;
+    if (b2FileSize !== undefined) clip.b2FileSize = b2FileSize ? parseInt(b2FileSize, 10) : 0;
 
     await clip.save();
+
+    // If URL changed and the old URL was a B2 object, delete it to save space
+    if (url && oldUrl !== url && oldUrl.startsWith('b2://')) {
+      const fileKey = oldUrl.replace('b2://', '');
+      try {
+        await s3Client.send(new DeleteObjectCommand({
+          Bucket: B2_BUCKET,
+          Key: fileKey
+        }));
+        if (oldB2Size) {
+          await B2Usage.updateOne(
+            { singleton: 'b2_usage' },
+            { $inc: { totalBytesUsed: -oldB2Size } }
+          );
+        }
+      } catch (err) {
+        console.error('Failed to delete old B2 object on update:', err);
+      }
+    }
+
+    // If URL changed and the new URL is a B2 object, increment usage
+    if (url && oldUrl !== url && url.startsWith('b2://') && b2FileSize) {
+      let usage = await B2Usage.findOne({ singleton: 'b2_usage' });
+      if (!usage) usage = new B2Usage({ singleton: 'b2_usage', totalBytesUsed: 0 });
+      usage.totalBytesUsed += parseInt(b2FileSize, 10);
+      await usage.save();
+    }
 
     const populatedClip = await Clip.findById(clip._id)
       .populate('movieId', 'title posterUrl mediaType')
       .populate('castInvolved', 'name photoUrl gender')
       .populate('addedBy', 'name');
 
-    res.json(populatedClip);
+    res.json(await signClip(populatedClip));
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
@@ -183,6 +310,25 @@ exports.deleteClip = async (req, res) => {
     }
 
     await Clip.deleteOne({ _id: id });
+
+    // Clean up B2 Object if it was hosted there
+    if (clip.url && clip.url.startsWith('b2://')) {
+      const fileKey = clip.url.replace('b2://', '');
+      try {
+        await s3Client.send(new DeleteObjectCommand({
+          Bucket: B2_BUCKET,
+          Key: fileKey
+        }));
+        if (clip.b2FileSize) {
+          await B2Usage.updateOne(
+            { singleton: 'b2_usage' },
+            { $inc: { totalBytesUsed: -clip.b2FileSize } }
+          );
+        }
+      } catch (err) {
+        console.error('Failed to delete B2 object:', err);
+      }
+    }
 
     // Clean up references in user favourites
     await User.updateMany(

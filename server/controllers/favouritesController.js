@@ -2,6 +2,7 @@ const User = require('../models/User');
 const Movie = require('../models/Movie');
 const Cast = require('../models/Cast');
 const Clip = require('../models/Clip');
+const clipsController = require('./clipsController');
 
 // Get all favourites for the authenticated user
 exports.getFavourites = async (req, res) => {
@@ -43,15 +44,18 @@ exports.getFavourites = async (req, res) => {
       };
     });
 
-    const populatedClips = user.favourites.clips.map(item => {
-      const details = clips.find(c => c._id.toString() === item.entityId.toString());
+    const populatedClips = await Promise.all(user.favourites.clips.map(async item => {
+      let details = clips.find(c => c._id.toString() === item.entityId.toString());
+      if (details) {
+        details = await clipsController.signClip(details);
+      }
       return {
         _id: item._id,
         entityId: item.entityId,
         level: item.level,
         details: details || null
       };
-    });
+    }));
 
     res.json({
       movies: populatedMovies,

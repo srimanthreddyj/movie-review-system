@@ -3,6 +3,7 @@ const Collection = require('../models/Collection');
 const Movie = require('../models/Movie');
 const Cast = require('../models/Cast');
 const Clip = require('../models/Clip');
+const clipsController = require('./clipsController');
 
 // Get all collections for the authenticated user
 exports.getCollections = async (req, res) => {
@@ -66,14 +67,17 @@ exports.getCollectionById = async (req, res) => {
     ]);
 
     // Map details back to items
-    const populatedItems = collection.items.map(item => {
+    const populatedItems = await Promise.all(collection.items.map(async item => {
       let details = null;
       if (item.entityType === 'movie') {
         details = movies.find(m => m._id.toString() === item.entityId.toString());
       } else if (item.entityType === 'cast') {
         details = casts.find(c => c._id.toString() === item.entityId.toString());
       } else if (item.entityType === 'clip') {
-        details = clips.find(c => c._id.toString() === item.entityId.toString());
+        const rawClip = clips.find(c => c._id.toString() === item.entityId.toString());
+        if (rawClip) {
+          details = await clipsController.signClip(rawClip);
+        }
       }
 
       return {
@@ -82,7 +86,7 @@ exports.getCollectionById = async (req, res) => {
         entityId: item.entityId,
         details: details || null
       };
-    });
+    }));
 
     // Return the collection with items populated
     const collectionObj = collection.toObject();
