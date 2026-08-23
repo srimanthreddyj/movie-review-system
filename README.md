@@ -1,8 +1,8 @@
-# 🎬 CineTrack (MovieMapper)
+# 🎬 MovieMapper
 
 **Live Demo**: [https://moviemapper.netlify.app/](https://moviemapper.netlify.app/)
 
-CineTrack is a full-stack movie tracking and review application. It allows you to search for movies, view comprehensive cast details, curate private collections, favorite clips, and write personal reviews. It also features a robust **Admin Dashboard** for managing content and monitoring system metrics.
+MovieMapper is a full-stack movie tracking and review application. It allows you to search for movies, view comprehensive cast details, curate private collections, favorite clips, and write personal reviews. It also features a robust **Admin Dashboard** for managing content and monitoring system metrics.
 
 ---
 
@@ -34,10 +34,15 @@ Before you begin, ensure you have the following installed on your machine:
 
 Follow these steps to run the project locally.
 
-### 1. Clone the Repository
+### 1. Clone the Repositories
 ```bash
-git clone https://github.com/srimanthreddyj/movie-review-system.git
-cd movie-review-system
+# Clone Backend Repository
+git clone https://github.com/<YOUR-USERNAME>/moviemapper-backend.git
+cd moviemapper-backend
+
+# Clone Frontend Repository
+git clone https://github.com/<YOUR-USERNAME>/moviemapper-frontend.git
+cd moviemapper-frontend
 ```
 
 ### 2. Configure the Backend

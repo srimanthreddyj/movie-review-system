@@ -1,7 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { Link } from 'react-router-dom';
-import { Play, Calendar, Tag, Trash2, Edit, FolderPlus } from 'lucide-react';
+import { Play, Trash2, Edit, FolderPlus, Maximize, AlertCircle } from 'lucide-react';
 import AddToCollectionModal from './AddToCollectionModal';
 import FavouriteButton from './FavouriteButton';
 
@@ -13,6 +13,9 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
   const [isPlaying, setIsPlaying] = useState(false);
   const [isCollectionModalOpen, setIsCollectionModalOpen] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [videoError, setVideoError] = useState(false);
+
+  const videoRef = useRef(null);
 
   // Extract YouTube ID from URL if applicable
   const getYouTubeId = (videoUrl) => {
@@ -43,9 +46,25 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
     return match2 ? match2[1] : null;
   };
 
+  // Query-agnostic check if URL points to an MP4 / direct video file
+  const isMp4OrDirectVideoUrl = (videoUrl) => {
+    if (!videoUrl) return false;
+    if (videoUrl.startsWith('b2://')) return false; // Presigned URL has not been generated yet
+    try {
+      const cleanUrl = videoUrl.split('?')[0].split('#')[0].toLowerCase();
+      const videoExtensions = ['.mp4', '.mov', '.m4v', '.webm', '.ogv', '.m3u8'];
+      if (videoExtensions.some(ext => cleanUrl.endsWith(ext))) return true;
+      if (cleanUrl.includes('/clips/') || cleanUrl.includes('video')) return true;
+    } catch (e) {
+      // fallback
+    }
+    return false;
+  };
+
   const videoId = getYouTubeId(url);
   const instagramShortcode = getInstagramShortcode(url);
   const googleDriveId = getGoogleDriveId(url);
+  const isDirectVideo = clip.isB2 || isMp4OrDirectVideoUrl(url);
 
   let thumbnailUrl = 'https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500&auto=format&fit=crop&q=60';
   let isInstagram = false;
@@ -59,13 +78,34 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
     isGoogleDrive = true;
   }
 
+  // Handle Fullscreen request cross-platform (specifically iOS Safari webkitEnterFullscreen for iPhone)
+  const handleFullscreen = () => {
+    if (!videoRef.current) return;
+    const el = videoRef.current;
+    if (el.webkitEnterFullscreen) {
+      // iOS / iPhone Safari native fullscreen
+      el.webkitEnterFullscreen();
+    } else if (el.requestFullscreen) {
+      el.requestFullscreen();
+    } else if (el.webkitRequestFullscreen) {
+      el.webkitRequestFullscreen();
+    } else if (el.msRequestFullscreen) {
+      el.msRequestFullscreen();
+    }
+  };
+
   // addedBy can be a populated object { _id, name } or a plain ID string
   const addedById = addedBy?._id?.toString() || addedBy?.toString();
   const canManage = addedById === currentUserId?.toString() || isAdmin;
 
+  const handleOpenPlayModal = () => {
+    setVideoError(false);
+    setIsPlaying(true);
+  };
+
   return (
     <div className="card clip-card">
-      <div className="card-img-container clip-thumbnail-container" onClick={() => setIsPlaying(true)}>
+      <div className="card-img-container clip-thumbnail-container" onClick={handleOpenPlayModal}>
         {isInstagram ? (
           <div className="card-img clip-thumbnail instagram-thumbnail flex-center" style={{
             width: '100%',
@@ -186,39 +226,56 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
         </div>
       </div>
 
-      {/* Video Modal Player Overlay (Portaled to body to prevent card transform/overflow clipping glitches) */}
+      {/* Video Modal Player Overlay (Portaled to body to prevent transform/overflow clipping glitches) */}
       {isPlaying && createPortal(
         <div className="video-player-backdrop flex-center" onClick={() => setIsPlaying(false)}>
           <div className={`video-player-modal ${instagramShortcode ? 'instagram-modal' : ''}`} onClick={(e) => e.stopPropagation()}>
             <div className="video-modal-header flex-between">
               <span className="video-modal-title">{title}</span>
-              <button onClick={() => setIsPlaying(false)} className="video-close-btn flex-center">
-                &times;
-              </button>
+              <div className="flex-center" style={{ gap: '0.5rem' }}>
+                {isDirectVideo && !videoError && (
+                  <button 
+                    type="button"
+                    onClick={handleFullscreen} 
+                    className="video-header-btn flex-center"
+                    title="Toggle Fullscreen (iOS & Android Compatible)"
+                    style={{ background: 'none', border: 'none', color: '#ffffff', cursor: 'pointer', padding: '4px' }}
+                  >
+                    <Maximize size={18} />
+                  </button>
+                )}
+                <button onClick={() => setIsPlaying(false)} className="video-close-btn flex-center">
+                  &times;
+                </button>
+              </div>
             </div>
             <div className="video-iframe-wrapper">
-              {clip.isB2 ? (
-                url && !url.startsWith('b2://') ? (
+              {isDirectVideo ? (
+                url && !url.startsWith('b2://') && !videoError ? (
                   <video
+                    ref={videoRef}
                     src={url}
                     controls
                     autoPlay
+                    playsInline
+                    webkit-playsinline="true"
+                    crossOrigin="anonymous"
+                    preload="auto"
+                    onError={() => setVideoError(true)}
                     className="video-iframe"
                     style={{ backgroundColor: '#000' }}
                   />
                 ) : (
-                  <div className="unsupported-video flex-center">
-                    <span>Video link has expired or failed to load. Please refresh the page and try again.</span>
+                  <div className="unsupported-video flex-center" style={{ flexDirection: 'column', gap: '0.75rem', textAlign: 'center' }}>
+                    <AlertCircle size={32} style={{ color: 'var(--error-color, #ef4444)' }} />
+                    <span>Video link has expired or failed to load.</span>
+                    {url && !url.startsWith('b2://') && (
+                      <a href={url} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-primary" style={{ marginTop: '0.5rem' }}>
+                        Open Direct Video Link
+                      </a>
+                    )}
                   </div>
                 )
-              ) : (url && url.toLowerCase().endsWith('.mp4') && !url.startsWith('b2://')) ? (
-                <video
-                  src={url}
-                  controls
-                  autoPlay
-                  className="video-iframe"
-                  style={{ backgroundColor: '#000' }}
-                />
               ) : videoId ? (
                 <iframe
                   src={`https://www.youtube.com/embed/${videoId}?autoplay=1`}
@@ -247,13 +304,13 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
                   className="video-iframe"
                 />
               ) : (
-                <div className="unsupported-video flex-center">
+                <div className="unsupported-video flex-center" style={{ flexDirection: 'column', gap: '0.75rem', textAlign: 'center' }}>
                   <span>
-                    Cannot play video inline. Open link directly:{' '}
-                    <a href={url} target="_blank" rel="noopener noreferrer">
-                      {url}
-                    </a>
+                    Cannot play video inline. Open link directly:
                   </span>
+                  <a href={url} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-primary">
+                    {url}
+                  </a>
                 </div>
               )}
             </div>
@@ -425,14 +482,14 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
           top: 0;
           left: 0;
           width: 100vw;
-          height: 100vh;
+          height: 100dvh;
           background-color: rgba(0,0,0,0.85);
-          z-index: 1000;
-          padding: 1.5rem;
+          z-index: 10000;
+          padding: 1rem;
         }
         .video-player-modal {
           width: 100%;
-          max-width: 800px;
+          max-width: 840px;
           background-color: #000000;
           border: 1px solid var(--border-color);
           border-radius: var(--border-radius);

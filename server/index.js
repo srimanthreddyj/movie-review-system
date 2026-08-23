@@ -49,7 +49,7 @@ app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/cliproom', require('./routes/driveRoutes'));
 // Basic health check route
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', message: 'CineTrack API is running' });
+  res.json({ status: 'ok', message: 'MovieMapper API is running' });
 });
 
 // Conditionally bind port only when running locally (not in serverless environments)

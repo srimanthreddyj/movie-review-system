@@ -1,4 +1,4 @@
-// AI Service for CineTrack leveraging Google Gemini API
+// AI Service for MovieMapper leveraging Google Gemini API
 
 /**
  * Generate movie explanation/review using Gemini API
@@ -19,7 +19,7 @@ exports.generateMovieExplanation = async (movie, castMembers) => {
 
   // Build a highly tailored prompt
   const prompt = `
-You are CineTrack AI, a professional film critic and movie analyst. Provide an engaging, detailed, and structured review and explanation of the following ${movie.mediaType === 'series' ? 'TV Series/Show' : 'Movie'}:
+You are MovieMapper AI, a professional film critic and movie analyst. Provide an engaging, detailed, and structured review and explanation of the following ${movie.mediaType === 'series' ? 'TV Series/Show' : 'Movie'}:
 
 Title: ${movie.title}
 Original Title: ${movie.originalTitle || 'N/A'}

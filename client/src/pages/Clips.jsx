@@ -398,20 +398,22 @@ const Clips = () => {
       if (uploadMode === 'upload' && selectedFile) {
         setUploadProgress(1); // Indicate start
         
+        const fileTypeToUse = selectedFile.type && selectedFile.type.trim() ? selectedFile.type.trim() : 'video/mp4';
+
         // 1. Get presigned URL
         const uploadRes = await api.get('/clips/upload-url', {
           params: {
             fileName: selectedFile.name,
-            fileType: selectedFile.type,
+            fileType: fileTypeToUse,
             fileSize: selectedFile.size
           }
         });
         
-        const { uploadUrl, fileKey, size } = uploadRes.data;
+        const { uploadUrl, fileKey, size, fileType: returnedType } = uploadRes.data;
 
         // 2. Upload file directly to B2 using the presigned URL
         await axios.put(uploadUrl, selectedFile, {
-          headers: { 'Content-Type': selectedFile.type },
+          headers: { 'Content-Type': returnedType || fileTypeToUse },
           onUploadProgress: (progressEvent) => {
             const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
             setUploadProgress(percentCompleted);

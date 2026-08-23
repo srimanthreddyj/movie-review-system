@@ -31,13 +31,14 @@ const signClip = async (clip) => {
   if (clipObj.url && clipObj.url.startsWith('b2://')) {
     const fileKey = clipObj.url.replace('b2://', '');
     clipObj.b2Key = clipObj.url; // Preserve original b2:// key for frontend edits
+    clipObj.isB2 = true;
     try {
       const command = new GetObjectCommand({
         Bucket: B2_BUCKET,
         Key: fileKey,
+        ResponseContentType: 'video/mp4'
       });
       clipObj.url = await getSignedUrl(s3Client, command, { expiresIn: 7200 });
-      clipObj.isB2 = true;
     } catch (err) {
       console.error('Failed to sign B2 URL:', err);
       // Keep b2Key set; url stays as b2:// to signal failure
@@ -114,10 +115,11 @@ exports.getUploadUrl = async (req, res) => {
   try {
     const { fileName, fileType, fileSize } = req.query;
     
-    if (!fileName || !fileType || !fileSize) {
-      return res.status(400).json({ message: 'Missing file details' });
+    if (!fileName || !fileSize) {
+      return res.status(400).json({ message: 'Missing file details (fileName and fileSize are required)' });
     }
 
+    const effectiveFileType = fileType && fileType.trim() ? fileType.trim() : 'video/mp4';
     const sizeNum = parseInt(fileSize, 10);
 
     // Check usage
@@ -138,7 +140,7 @@ exports.getUploadUrl = async (req, res) => {
     const command = new PutObjectCommand({
       Bucket: B2_BUCKET,
       Key: key,
-      ContentType: fileType
+      ContentType: effectiveFileType
     });
 
     const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn: 300 });
@@ -146,7 +148,8 @@ exports.getUploadUrl = async (req, res) => {
     res.json({
       uploadUrl,
       fileKey: `b2://${key}`,
-      size: sizeNum
+      size: sizeNum,
+      fileType: effectiveFileType
     });
   } catch (error) {
     res.status(500).json({ message: 'Failed to generate upload URL', error: error.message });
