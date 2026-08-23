@@ -285,6 +285,66 @@ exports.createMovie = async (req, res) => {
   }
 };
 
+const fetchAndResolvePopularMovies = async (req) => {
+  const { isExternalApiEnabled } = require('./settingsController');
+  if (!isExternalApiEnabled()) {
+    throw new Error('External APIs are disabled');
+  }
+  const externalMovies = await movieApiService.getPopularMovies();
+  if (!externalMovies || externalMovies.length === 0) {
+    throw new Error('No popular movies returned from API');
+  }
+
+  // Resolve local versions of these popular movies
+  const tmdbIds = externalMovies.filter(m => m.source === 'tmdb').map(m => m.refId);
+  const imdbIds = externalMovies.filter(m => m.source === 'omdb').map(m => m.refId);
+
+  const localMovies = await Movie.find({
+    $or: [
+      { tmdbId: { $in: tmdbIds } },
+      { imdbId: { $in: imdbIds } }
+    ]
+  });
+
+  const combined = externalMovies.map(item => {
+    let existingLocal = null;
+    if (item.source === 'tmdb') {
+      existingLocal = localMovies.find(m => m.tmdbId === item.refId);
+    } else if (item.source === 'omdb') {
+      existingLocal = localMovies.find(m => m.imdbId === item.refId);
+    }
+
+    if (existingLocal) {
+      return {
+        _id: existingLocal._id.toString(),
+        title: existingLocal.title,
+        originalTitle: existingLocal.originalTitle || '',
+        releaseDate: existingLocal.releaseDate,
+        posterUrl: existingLocal.posterUrl,
+        refId: existingLocal._id.toString(),
+        source: 'local',
+        mediaType: existingLocal.mediaType || 'movie',
+        synopsis: existingLocal.synopsis || '',
+        genre: existingLocal.genre || []
+      };
+    }
+    return {
+      _id: item.refId,
+      title: item.title,
+      originalTitle: item.originalTitle || '',
+      releaseDate: item.releaseDate,
+      posterUrl: item.posterUrl,
+      refId: item.refId,
+      source: item.source,
+      mediaType: item.mediaType || 'movie',
+      synopsis: item.synopsis || '',
+      genre: item.genre || []
+    };
+  });
+
+  return combined;
+};
+
 // 4. Get Movies (Catalogue list with filters & pagination)
 exports.getMovies = async (req, res) => {
   try {
@@ -310,6 +370,46 @@ exports.getMovies = async (req, res) => {
       ];
     }
 
+    // Standard user browsing feed (no tag, no search query) -> attempt live feed
+    if (req.user.role !== 'admin' && !tagId && !q) {
+      try {
+        let moviesList = await fetchAndResolvePopularMovies(req);
+        
+        // Filter in-memory
+        if (genre) {
+          moviesList = moviesList.filter(m => m.genre && m.genre.includes(genre));
+        }
+        if (mediaType) {
+          moviesList = moviesList.filter(m => m.mediaType === mediaType);
+        }
+        if (language) {
+          moviesList = moviesList.filter(m => m.language === language || (m.languages && m.languages.includes(language)));
+        }
+        if (status) {
+          moviesList = moviesList.filter(m => m.status === status);
+        }
+
+        const total = moviesList.length;
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        const skip = (pageNum - 1) * limitNum;
+        const paginatedMovies = moviesList.slice(skip, skip + limitNum);
+
+        return res.json({
+          movies: paginatedMovies,
+          page: pageNum,
+          totalPages: Math.ceil(total / limitNum),
+          totalMovies: total
+        });
+      } catch (err) {
+        console.warn('Live popular movies fetch failed, falling back to local DB popular:', err.message);
+        // Trigger weekly sync in background check if expired
+        try {
+          refreshPopularCacheIfExpired(false).catch(e => console.warn('Background sync trigger failed:', e.message));
+        } catch (e) {}
+      }
+    }
+
     if (tagId) {
       const assignments = await TagAssignment.find({
         userId: req.user.id,
@@ -319,9 +419,10 @@ exports.getMovies = async (req, res) => {
       const movieIds = assignments.map(a => a.entityId);
       query._id = { $in: movieIds };
     } else if (req.user.role !== 'admin') {
-      // For standard users browsing the catalogue,
-      // only show system-synced popular items to prevent leaking other users' niche imports.
-      query.isPopular = true;
+      // Standard user with fallback - only filter by isPopular if not searching
+      if (!q) {
+        query.isPopular = true;
+      }
     }
 
     const pageNum = parseInt(page);
@@ -846,24 +947,30 @@ const refreshPopularCacheIfExpired = async (force = false) => {
 // Controller: Get popular movies (with weekly cache refresh check)
 exports.getPopularMovies = async (req, res) => {
   try {
-    const forceSync = req.query.forceSync === 'true';
-    await refreshPopularCacheIfExpired(forceSync);
-    const popular = await Movie.find({ isPopular: true }).sort({ rating: -1, releaseDate: -1 }).limit(20);
+    try {
+      const movies = await fetchAndResolvePopularMovies(req);
+      return res.json(movies);
+    } catch (apiErr) {
+      console.warn('getPopularMovies live fetch failed, falling back to database popular cache:', apiErr.message);
+      const forceSync = req.query.forceSync === 'true';
+      await refreshPopularCacheIfExpired(forceSync);
+      const popular = await Movie.find({ isPopular: true }).sort({ rating: -1, releaseDate: -1 }).limit(20);
 
-    const formatted = popular.map(movie => ({
-      _id: movie._id.toString(),
-      title: movie.title,
-      originalTitle: movie.originalTitle || '',
-      releaseDate: movie.releaseDate,
-      posterUrl: movie.posterUrl,
-      refId: movie._id.toString(),
-      source: 'local',
-      mediaType: movie.mediaType || 'movie',
-      synopsis: movie.synopsis || '',
-      genre: movie.genre || []
-    }));
+      const formatted = popular.map(movie => ({
+        _id: movie._id.toString(),
+        title: movie.title,
+        originalTitle: movie.originalTitle || '',
+        releaseDate: movie.releaseDate,
+        posterUrl: movie.posterUrl,
+        refId: movie._id.toString(),
+        source: 'local',
+        mediaType: movie.mediaType || 'movie',
+        synopsis: movie.synopsis || '',
+        genre: movie.genre || []
+      }));
 
-    res.json(formatted);
+      res.json(formatted);
+    }
   } catch (error) {
     res.status(500).json({ message: 'Fetching popular movies failed', error: error.message });
   }

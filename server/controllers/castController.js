@@ -2,6 +2,52 @@ const Cast = require('../models/Cast');
 const Movie = require('../models/Movie');
 const TagAssignment = require('../models/TagAssignment');
 
+const fetchAndResolvePopularCast = async (req) => {
+  const { isExternalApiEnabled } = require('./settingsController');
+  if (!isExternalApiEnabled()) {
+    throw new Error('External APIs are disabled');
+  }
+  const movieApiService = require('../services/movieApiService');
+  const externalCast = await movieApiService.getPopularCast();
+  if (!externalCast || externalCast.length === 0) {
+    throw new Error('No popular cast returned from API');
+  }
+
+  // Resolve local versions of these popular cast members
+  const tmdbIds = externalCast.filter(c => c.tmdbId).map(c => c.tmdbId);
+  const localCast = await Cast.find({ tmdbId: { $in: tmdbIds } });
+
+  const combined = externalCast.map(item => {
+    const existingLocal = localCast.find(c => c.tmdbId === item.tmdbId);
+    if (existingLocal) {
+      return {
+        _id: existingLocal._id.toString(),
+        name: existingLocal.name,
+        tmdbId: existingLocal.tmdbId,
+        photoUrl: existingLocal.photoUrl,
+        gender: existingLocal.gender,
+        knownForDepartment: existingLocal.knownFor || 'Acting',
+        knownFor: '',
+        source: 'local',
+        refId: existingLocal._id.toString()
+      };
+    }
+    return {
+      _id: item.tmdbId,
+      name: item.name,
+      tmdbId: item.tmdbId,
+      photoUrl: item.photoUrl,
+      gender: item.gender,
+      knownForDepartment: item.knownForDepartment || 'Acting',
+      knownFor: '',
+      source: item.source || 'tmdb',
+      refId: item.tmdbId
+    };
+  });
+
+  return combined;
+};
+
 // 1. Get Cast members (search + tags + pagination)
 exports.getCasts = async (req, res) => {
   try {
@@ -23,6 +69,36 @@ exports.getCasts = async (req, res) => {
       query.knownFor = knownFor;
     }
 
+    // Standard user browsing feed (no tag, no search query) -> attempt live feed
+    if (req.user.role !== 'admin' && !tagId && !q) {
+      try {
+        let castList = await fetchAndResolvePopularCast(req);
+
+        // Filter in-memory
+        if (gender) {
+          castList = castList.filter(c => c.gender === gender);
+        }
+        if (knownFor) {
+          castList = castList.filter(c => c.knownForDepartment === knownFor || c.knownFor === knownFor);
+        }
+
+        const total = castList.length;
+        const pageNum = parseInt(page);
+        const limitNum = parseInt(limit);
+        const skip = (pageNum - 1) * limitNum;
+        const paginatedCasts = castList.slice(skip, skip + limitNum);
+
+        return res.json({
+          casts: paginatedCasts,
+          page: pageNum,
+          totalPages: Math.ceil(total / limitNum),
+          totalCasts: total
+        });
+      } catch (err) {
+        console.warn('Live popular cast fetch failed, falling back to local DB popular:', err.message);
+      }
+    }
+
     // Filter by User-Scoped Tag Assignment
     if (tagId) {
       const assignments = await TagAssignment.find({
@@ -33,7 +109,10 @@ exports.getCasts = async (req, res) => {
       const castIds = assignments.map(a => a.entityId);
       query._id = { $in: castIds };
     } else if (req.user.role !== 'admin') {
-      query.isPopular = true;
+      // Standard user with fallback - only filter by isPopular if not searching
+      if (!q) {
+        query.isPopular = true;
+      }
     }
 
     const pageNum = parseInt(page);
@@ -414,19 +493,25 @@ exports.previewExternalCast = async (req, res) => {
 // Controller: Get popular cast members (cached weekly)
 exports.getPopularCast = async (req, res) => {
   try {
-    const popular = await Cast.find({ isPopular: true }).sort({ name: 1 }).limit(20);
-    const formatted = popular.map(c => ({
-      _id: c._id.toString(),
-      name: c.name,
-      tmdbId: c.tmdbId,
-      photoUrl: c.photoUrl,
-      gender: c.gender,
-      knownForDepartment: c.knownFor || 'Acting',
-      knownFor: '',
-      source: 'local',
-      refId: c._id.toString()
-    }));
-    res.json(formatted);
+    try {
+      const cast = await fetchAndResolvePopularCast(req);
+      res.json(cast);
+    } catch (apiErr) {
+      console.warn('getPopularCast live fetch failed, falling back to database popular cache:', apiErr.message);
+      const popular = await Cast.find({ isPopular: true }).sort({ name: 1 }).limit(20);
+      const formatted = popular.map(c => ({
+        _id: c._id.toString(),
+        name: c.name,
+        tmdbId: c.tmdbId,
+        photoUrl: c.photoUrl,
+        gender: c.gender,
+        knownForDepartment: c.knownFor || 'Acting',
+        knownFor: '',
+        source: 'local',
+        refId: c._id.toString()
+      }));
+      res.json(formatted);
+    }
   } catch (error) {
     res.status(500).json({ message: 'Fetching popular cast members failed', error: error.message });
   }
