@@ -1126,7 +1126,7 @@ let popularMoviesCache = { data: null, timestamp: 0 };
 let popularCastCache = { data: null, timestamp: 0 };
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour cache
 
-// Fetch top 20 popular movies from TMDB
+// Fetch top 100 popular movies (5 pages) from TMDB
 exports.getPopularMovies = async () => {
   const now = Date.now();
   if (popularMoviesCache.data && (now - popularMoviesCache.timestamp < CACHE_TTL_MS)) {
@@ -1134,11 +1134,56 @@ exports.getPopularMovies = async () => {
   }
 
   const apiKey = process.env.TMDB_API_KEY;
-  const geminiApiKey = process.env.GEMINI_API_KEY;
 
+  // 1. Try native TMDB popular movies endpoint (fetching top 5 pages = 100 movies)
+  if (apiKey) {
+    try {
+      const pagesToFetch = [1, 2, 3, 4, 5];
+      const pageResponses = await Promise.all(
+        pagesToFetch.map(p => fetchWithTimeout(`https://api.themoviedb.org/3/movie/popular?api_key=${apiKey}&language=en-US&page=${p}`))
+      );
+
+      const genreMap = {
+        28: 'Action', 12: 'Adventure', 16: 'Animation', 35: 'Comedy', 80: 'Crime',
+        99: 'Documentary', 18: 'Drama', 10751: 'Family', 14: 'Fantasy', 36: 'History',
+        27: 'Horror', 10402: 'Music', 9648: 'Mystery', 10749: 'Romance', 878: 'Sci-Fi',
+        10770: 'TV Movie', 53: 'Thriller', 10752: 'War', 37: 'Western'
+      };
+
+      const allMovies = [];
+      for (const res of pageResponses) {
+        if (res.ok) {
+          const data = await res.json();
+          (data.results || []).forEach(movie => {
+            allMovies.push({
+              title: movie.title,
+              originalTitle: movie.original_title || '',
+              releaseDate: movie.release_date ? new Date(movie.release_date) : null,
+              posterUrl: getTmdbImageUrl(movie.poster_path),
+              refId: movie.id.toString(),
+              source: 'tmdb',
+              mediaType: 'movie',
+              synopsis: movie.overview || '',
+              genre: (movie.genre_ids || []).map(id => genreMap[id]).filter(Boolean)
+            });
+          });
+        }
+      }
+
+      if (allMovies.length > 0) {
+        popularMoviesCache = { data: allMovies, timestamp: Date.now() };
+        return allMovies;
+      }
+    } catch (err) {
+      console.warn('TMDB popular movies fetch failed. Falling back to Gemini...', err.message);
+    }
+  }
+
+  // 2. Gemini AI fallback if TMDB fails or is missing key
+  const geminiApiKey = process.env.GEMINI_API_KEY;
   if (geminiApiKey) {
     try {
-      console.log('API Service: Asking Gemini for trending movies & TMDB IDs...');
+      console.log('API Service: Asking Gemini for trending movies...');
       const prompt = `
         Provide a list of 20 highly popular and trending movies (especially recent releases).
         For each movie, you must provide its valid, official numeric TMDB (The Movie Database) ID.
@@ -1159,12 +1204,9 @@ exports.getPopularMovies = async () => {
       const cleanJson = text.replace(/^```json\s*/i, '').replace(/```$/, '').trim();
       const geminiMovies = JSON.parse(cleanJson);
 
-      console.log(`API Service: Gemini returned ${geminiMovies.length} trending movies. Fetching details from TMDB...`);
-
       const moviesList = await Promise.all(geminiMovies.map(async (item) => {
         if (!item.tmdbId) return null;
         try {
-          // Fetch basic movie details from TMDB using the TMDB ID
           const url = `https://api.themoviedb.org/3/movie/${item.tmdbId}?api_key=${apiKey}&language=en-US`;
           const res = await fetchWithTimeout(url);
           if (!res.ok) throw new Error(`TMDB details lookup failed: ${res.statusText}`);
@@ -1182,7 +1224,6 @@ exports.getPopularMovies = async () => {
             genre: tmdbData.genres ? tmdbData.genres.map(g => g.name) : (item.genre || [])
           };
         } catch (err) {
-          console.warn(`API Service: TMDB fetch failed for ID ${item.tmdbId}, using Gemini metadata fallback. Error:`, err.message);
           const poster = await fetchPosterFromOMDB(item.title, item.releaseDate);
           return {
             title: item.title,
@@ -1204,56 +1245,13 @@ exports.getPopularMovies = async () => {
         return filteredMoviesList;
       }
     } catch (err) {
-      console.error('API Service: Asking Gemini for popular movies failed. Falling back to native TMDB popular list... Error:', err.message);
+      console.error('Gemini popular movies fallback failed:', err.message);
     }
   }
 
-  // Native TMDB popular movies endpoint (fetching top 5 pages = 100 movies)
-  try {
-    if (!apiKey) throw new Error('TMDB API Key missing');
-
-    const pagesToFetch = [1, 2, 3, 4, 5];
-    const pageResponses = await Promise.all(
-      pagesToFetch.map(p => fetchWithTimeout(`https://api.themoviedb.org/3/movie/popular?api_key=${apiKey}&language=en-US&page=${p}`))
-    );
-
-    const genreMap = {
-      28: 'Action', 12: 'Adventure', 16: 'Animation', 35: 'Comedy', 80: 'Crime',
-      99: 'Documentary', 18: 'Drama', 10751: 'Family', 14: 'Fantasy', 36: 'History',
-      27: 'Horror', 10402: 'Music', 9648: 'Mystery', 10749: 'Romance', 878: 'Sci-Fi',
-      10770: 'TV Movie', 53: 'Thriller', 10752: 'War', 37: 'Western'
-    };
-
-    const allMovies = [];
-    for (const res of pageResponses) {
-      if (res.ok) {
-        const data = await res.json();
-        (data.results || []).forEach(movie => {
-          allMovies.push({
-            title: movie.title,
-            originalTitle: movie.original_title || '',
-            releaseDate: movie.release_date ? new Date(movie.release_date) : null,
-            posterUrl: getTmdbImageUrl(movie.poster_path),
-            refId: movie.id.toString(),
-            source: 'tmdb',
-            mediaType: 'movie',
-            synopsis: movie.overview || '',
-            genre: (movie.genre_ids || []).map(id => genreMap[id]).filter(Boolean)
-          });
-        });
-      }
-    }
-
-    if (allMovies.length > 0) {
-      popularMoviesCache = { data: allMovies, timestamp: Date.now() };
-      return allMovies;
-    }
-  } catch (err) {
-    console.warn('TMDB popular movies fetch failed. Calling Gemini fallback...', err.message);
-    const fallbackMovies = await getPopularMoviesFromGemini();
-    popularMoviesCache = { data: fallbackMovies, timestamp: Date.now() };
-    return fallbackMovies;
-  }
+  const fallbackMovies = await getPopularMoviesFromGemini();
+  popularMoviesCache = { data: fallbackMovies, timestamp: Date.now() };
+  return fallbackMovies;
 };
 
 // Fetch top 100 popular cast members (5 pages) from TMDB

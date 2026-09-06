@@ -5,6 +5,8 @@ dist/
 # Env files
 .env
 .env.local
+.env.*.local
+!.env.example
 
 # Logs
 logs
