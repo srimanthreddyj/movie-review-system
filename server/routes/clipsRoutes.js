@@ -13,6 +13,11 @@ router.get('/upload-url', auth, clipsController.getUploadUrl);
 // @access  Private
 router.get('/', auth, clipsController.getClips);
 
+// @route   GET /api/clips/:id/stream
+// @desc    Stream clip video content directly for native HTML5 & mobile compatibility
+// @access  Public
+router.get('/:id/stream', clipsController.streamClip);
+
 // @route   GET /api/clips/:id
 // @desc    Get single clip by ID with fresh presigned URL
 // @access  Private

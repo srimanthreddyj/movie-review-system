@@ -193,6 +193,31 @@ const CastCard = ({ cast, userFavourites = [], characterName, onClick, state, hi
         .cast-nationality {
           gap: 0.125rem;
         }
+        @media (max-width: 640px) {
+          .actress-badge, .priority-badge {
+            top: 0.35rem;
+            padding: 0.15rem 0.35rem;
+            font-size: 0.65rem;
+          }
+          .actress-badge { left: 0.35rem; }
+          .priority-badge { right: 0.35rem; }
+          .source-badge {
+            bottom: 0.35rem;
+            left: 0.35rem;
+            padding: 0.12rem 0.35rem;
+            font-size: 0.6rem;
+          }
+          .cast-character-name {
+            font-size: 0.75rem;
+            margin-bottom: 0.35rem;
+          }
+          .cast-meta-info {
+            font-size: 0.7rem;
+          }
+          .cast-known-for {
+            padding: 0.1rem 0.3rem;
+          }
+        }
       `}</style>
     </div>
   );

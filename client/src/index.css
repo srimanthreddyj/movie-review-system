@@ -114,6 +114,12 @@ a:hover {
   padding: 1.5rem;
 }
 
+@media (max-width: 640px) {
+  .container {
+    padding: 0.75rem;
+  }
+}
+
 .flex {
   display: flex;
 }
@@ -130,18 +136,18 @@ a:hover {
   justify-content: space-between;
 }
 
-/* Grid Layouts - Responsive and Mobile-friendly */
+/* Grid Layouts - Responsive 2 Columns per row on Mobile (iPhone 13) */
 .grid-cards {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
   gap: 1.5rem;
   margin-bottom: 2rem;
 }
 
 @media (max-width: 640px) {
   .grid-cards {
-    grid-template-columns: 1fr;
-    gap: 1.25rem;
+    grid-template-columns: repeat(2, 1fr) !important;
+    gap: 0.65rem !important;
   }
 }
 
@@ -202,6 +208,20 @@ a:hover {
   font-size: 0.875rem;
   color: var(--text-secondary);
   margin-bottom: 0.75rem;
+}
+
+@media (max-width: 640px) {
+  .card-content {
+    padding: 0.6rem 0.65rem;
+  }
+  .card-title {
+    font-size: 0.875rem;
+    margin-bottom: 0.15rem;
+  }
+  .card-subtitle {
+    font-size: 0.75rem;
+    margin-bottom: 0.5rem;
+  }
 }
 
 /* Badges & Labels */

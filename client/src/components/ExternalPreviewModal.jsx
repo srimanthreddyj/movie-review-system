@@ -502,6 +502,12 @@ const ExternalPreviewModal = ({ isOpen, onClose, entityRefId, entitySource, enti
           overflow-y: auto;
           padding-right: 0.5rem;
         }
+        @media (max-width: 640px) {
+          .preview-cast-grid {
+            grid-template-columns: repeat(2, 1fr) !important;
+            gap: 0.5rem !important;
+          }
+        }
         .preview-cast-card {
           background-color: var(--bg-secondary);
           border: 1px solid var(--border-color);

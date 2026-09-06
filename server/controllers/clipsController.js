@@ -48,6 +48,56 @@ const signClip = async (clip) => {
 };
 exports.signClip = signClip;
 
+// Stream clip video directly with Range headers for mobile Safari/Chrome compatibility
+exports.streamClip = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const clip = await Clip.findById(id);
+
+    if (!clip) {
+      return res.status(404).json({ message: 'Clip not found' });
+    }
+
+    if (!clip.url || !clip.url.startsWith('b2://')) {
+      return res.redirect(clip.url);
+    }
+
+    const fileKey = clip.url.replace('b2://', '');
+    const range = req.headers.range;
+
+    const getObjectParams = {
+      Bucket: B2_BUCKET,
+      Key: fileKey
+    };
+
+    if (range) {
+      getObjectParams.Range = range;
+    }
+
+    const s3Command = new GetObjectCommand(getObjectParams);
+    const s3Response = await s3Client.send(s3Command);
+
+    res.setHeader('Content-Type', s3Response.ContentType || 'video/mp4');
+    res.setHeader('Accept-Ranges', 'bytes');
+    if (s3Response.ContentLength) {
+      res.setHeader('Content-Length', s3Response.ContentLength);
+    }
+    if (s3Response.ContentRange) {
+      res.setHeader('Content-Range', s3Response.ContentRange);
+      res.status(206);
+    } else {
+      res.status(200);
+    }
+
+    s3Response.Body.pipe(res);
+  } catch (error) {
+    console.error('Error streaming video clip from B2:', error.message);
+    if (!res.headersSent) {
+      res.status(500).json({ message: 'Streaming video clip failed', error: error.message });
+    }
+  }
+};
+
 // Get all clips with filtering and pagination
 exports.getClips = async (req, res) => {
   try {

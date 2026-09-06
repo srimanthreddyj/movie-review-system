@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Download, AlertCircle, Plus, Check } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
-import api from '../services/api';
+import api, { getBaseURL } from '../services/api';
 
 const FilePreviewModal = ({ file, onClose }) => {
   const [content, setContent] = useState(null);
@@ -64,7 +64,7 @@ const FilePreviewModal = ({ file, onClose }) => {
     }
 
     if (isVideo) {
-      const baseURL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api';
+      const baseURL = getBaseURL();
       const streamUrl = `${baseURL}/cliproom/stream/${file.id}`;
       return (
         <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', backgroundColor: '#000' }}>

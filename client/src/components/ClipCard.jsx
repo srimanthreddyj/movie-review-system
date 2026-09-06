@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import { Play, Trash2, Edit, FolderPlus, Maximize, AlertCircle, RotateCcw, Film, User as UserIcon } from 'lucide-react';
 import AddToCollectionModal from './AddToCollectionModal';
 import FavouriteButton from './FavouriteButton';
-import api, { getProxiedImageUrl } from '../services/api';
+import api, { getProxiedImageUrl, getBaseURL } from '../services/api';
 
 const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpdate, currentUserId, isAdmin }) => {
   const { _id, title, url, description, clipType, thumbnailUrl, addedBy, movieId, castInvolved = [], movieInfo, castInvolvedDetails } = clip;
@@ -17,6 +17,10 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
   const [videoError, setVideoError] = useState(false);
   const [activeUrl, setActiveUrl] = useState(url);
   const [isRefreshingUrl, setIsRefreshingUrl] = useState(false);
+  const [thumbError, setThumbError] = useState(false);
+
+  const videoRef = useRef(null);
+  const hasRetriedRef = useRef(false);
 
   useEffect(() => {
     setActiveUrl(url);
@@ -38,7 +42,27 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
     }
   };
 
-  const videoRef = useRef(null);
+  const handleVideoError = async () => {
+    if (!hasRetriedRef.current) {
+      hasRetriedRef.current = true;
+      console.log(`ClipCard: Video onError fired for "${title}". Attempting auto presigned URL refresh...`);
+      setIsRefreshingUrl(true);
+      try {
+        const res = await api.get(`/clips/${_id}`);
+        if (res.data && res.data.url) {
+          setActiveUrl(res.data.url);
+          setVideoError(false);
+          setIsRefreshingUrl(false);
+          return;
+        }
+      } catch (err) {
+        console.error('Failed to auto-refresh clip URL:', err.message);
+      } finally {
+        setIsRefreshingUrl(false);
+      }
+    }
+    setVideoError(true);
+  };
 
   // Extract YouTube ID from URL if applicable
   const getYouTubeId = (videoUrl) => {
@@ -72,7 +96,7 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
   // Query-agnostic check if URL points to an MP4 / direct video file
   const isMp4OrDirectVideoUrl = (videoUrl) => {
     if (!videoUrl) return false;
-    if (videoUrl.startsWith('b2://')) return false; // Presigned URL has not been generated yet
+    if (videoUrl.startsWith('b2://')) return false;
     try {
       const cleanUrl = videoUrl.split('?')[0].split('#')[0].toLowerCase();
       const videoExtensions = ['.mp4', '.mov', '.m4v', '.webm', '.ogv', '.m3u8'];
@@ -83,8 +107,6 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
     }
     return false;
   };
-
-  const [thumbError, setThumbError] = useState(false);
 
   const videoId = getYouTubeId(activeUrl);
   const instagramShortcode = getInstagramShortcode(activeUrl);
@@ -120,7 +142,6 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
     if (!videoRef.current) return;
     const el = videoRef.current;
     if (el.webkitEnterFullscreen) {
-      // iOS / iPhone Safari native fullscreen
       el.webkitEnterFullscreen();
     } else if (el.requestFullscreen) {
       el.requestFullscreen();
@@ -131,13 +152,21 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
     }
   };
 
-  // addedBy can be a populated object { _id, name } or a plain ID string
   const addedById = addedBy?._id?.toString() || addedBy?.toString();
   const canManage = addedById === currentUserId?.toString() || isAdmin;
 
   const handleOpenPlayModal = () => {
     setVideoError(false);
+    hasRetriedRef.current = false;
     setIsPlaying(true);
+  };
+
+  const getStreamUrl = () => {
+    if (clip.isB2 && _id) {
+      const apiBase = (api.defaults && api.defaults.baseURL) ? api.defaults.baseURL : getBaseURL();
+      return `${apiBase}/clips/${_id}/stream`;
+    }
+    return activeUrl;
   };
 
   return (
@@ -150,7 +179,7 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
           onError={() => setThumbError(true)} 
         />
         
-        {/* Subtle source indicator badges */}
+        {/* Source Badges */}
         {isInstagram && <span className="clip-source-badge instagram-source-badge">Instagram</span>}
         {isGoogleDrive && <span className="clip-source-badge gdrive-source-badge">Google Drive</span>}
         {clip.isB2 && <span className="clip-source-badge b2-source-badge">Hosted</span>}
@@ -171,10 +200,10 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
         <h3 className="card-title" title={title}>{title}</h3>
         
         {displayMovie && (
-          <div className="clip-movie-badge-wrapper">
-            <Link to={`/movies/${displayMovie._id}`} className="clip-movie-pill flex-center">
-              <Film size={12} style={{ marginRight: '0.35rem', flexShrink: 0 }} />
-              <span className="clip-movie-pill-title">{displayMovie.title}</span>
+          <div className="clip-movie-title">
+            <span>Movie:</span>{' '}
+            <Link to={`/movies/${displayMovie._id}`} style={{ color: 'var(--accent-color)', fontWeight: 500 }}>
+              {displayMovie.title}
             </Link>
           </div>
         )}
@@ -184,14 +213,14 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
         {/* Cast Involved */}
         {displayCast.length > 0 && (
           <div className="clip-cast-list">
-            {displayCast.slice(0, 3).map((cast) => (
+            {displayCast.slice(0, 4).map((cast) => (
               <Link key={cast._id} to={`/cast/${cast._id}`} className="clip-cast-pill flex-center">
-                <UserIcon size={10} style={{ marginRight: '0.25rem' }} />
+                <UserIcon size={10} style={{ marginRight: '0.2rem' }} />
                 <span>{cast.name}</span>
               </Link>
             ))}
-            {displayCast.length > 3 && (
-              <span className="clip-cast-more">+{displayCast.length - 3}</span>
+            {displayCast.length > 4 && (
+              <span className="clip-cast-pill">+{displayCast.length - 4}</span>
             )}
           </div>
         )}
@@ -201,10 +230,10 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
           <div className="flex-center" style={{ gap: '0.5rem', flexWrap: 'wrap' }}>
             <button 
               onClick={() => setIsCollectionModalOpen(true)} 
-              className="btn btn-sm clip-btn-action flex-center" 
+              className="btn btn-sm flex-center" 
               title="Save to Collection"
             >
-              <FolderPlus size={15} style={{ marginRight: '0.35rem' }} />
+              <FolderPlus size={14} style={{ marginRight: '0.25rem' }} />
               <span>Save</span>
             </button>
 
@@ -216,26 +245,26 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
             />
           </div>
 
-          <div className="flex-center" style={{ gap: '0.375rem' }}>
+          <div className="flex-center" style={{ gap: '0.35rem' }}>
             {canManage && onEdit && (
-              <button onClick={() => onEdit(clip)} className="btn btn-sm clip-btn-icon" title="Edit Clip">
-                <Edit size={15} />
+              <button onClick={() => onEdit(clip)} className="btn btn-sm btn-icon" title="Edit Clip">
+                <Edit size={14} />
               </button>
             )}
             {canManage && onDelete && (
               <button 
                 onClick={() => setShowDeleteConfirm(true)} 
-                className="btn btn-danger btn-sm clip-btn-icon" 
+                className="btn btn-danger btn-sm btn-icon" 
                 title="Delete Clip"
               >
-                <Trash2 size={15} />
+                <Trash2 size={14} />
               </button>
             )}
           </div>
         </div>
       </div>
 
-      {/* Video Modal Player Overlay */}
+      {/* Video Player Modal Popup (Portaled to body) */}
       {isPlaying && createPortal(
         <div className="video-player-backdrop flex-center" onClick={() => setIsPlaying(false)}>
           <div className={`video-player-modal ${instagramShortcode ? 'instagram-modal' : ''}`} onClick={(e) => e.stopPropagation()}>
@@ -259,16 +288,16 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
             </div>
             <div className="video-iframe-wrapper">
               {isDirectVideo ? (
-                activeUrl && !activeUrl.startsWith('b2://') && !videoError ? (
+                !videoError ? (
                   <video
                     ref={videoRef}
-                    src={activeUrl}
+                    src={getStreamUrl()}
                     controls
                     autoPlay
                     playsInline
                     webkit-playsinline="true"
                     preload="auto"
-                    onError={() => setVideoError(true)}
+                    onError={handleVideoError}
                     className="video-iframe"
                     style={{ backgroundColor: '#000' }}
                   />
@@ -288,7 +317,7 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
                       </button>
                       {activeUrl && !activeUrl.startsWith('b2://') && (
                         <a href={activeUrl} target="_blank" rel="noopener noreferrer" className="btn btn-sm btn-primary">
-                          Open Direct Video Link
+                          Open Direct Link
                         </a>
                       )}
                     </div>
@@ -357,14 +386,14 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
             <div className="flex-center" style={{ gap: '0.75rem' }}>
               <button 
                 className="btn btn-secondary" 
-                style={{ flex: 1, minHeight: '40px' }}
+                style={{ flex: 1, minHeight: '38px' }}
                 onClick={() => setShowDeleteConfirm(false)}
               >
                 Cancel
               </button>
               <button 
                 className="btn btn-danger" 
-                style={{ flex: 1, minHeight: '40px' }}
+                style={{ flex: 1, minHeight: '38px' }}
                 onClick={() => {
                   setShowDeleteConfirm(false);
                   onDelete(_id);
@@ -382,33 +411,28 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
           height: 100%;
           display: flex;
           flex-direction: column;
-          border-radius: var(--border-radius, 12px);
-          overflow: hidden;
-          background-color: var(--bg-secondary);
-          border: 1px solid var(--border-color);
-          transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s;
         }
-        .clip-card:hover {
-          transform: translateY(-4px);
-          border-color: var(--accent-color);
-          box-shadow: 0 12px 28px -6px rgba(0, 0, 0, 0.4);
+        .clip-card .card-content {
+          display: flex;
+          flex-direction: column;
+          flex-grow: 1;
+          padding: 1rem;
         }
         .clip-thumbnail-container {
           cursor: pointer;
           position: relative;
-          width: 100%;
           aspect-ratio: 16 / 9;
           overflow: hidden;
-          background-color: #0d0d11;
+          background-color: var(--bg-tertiary);
         }
         .clip-thumbnail {
           width: 100%;
           height: 100%;
           object-fit: cover;
-          transition: transform 0.4s ease;
+          transition: transform var(--transition-speed);
         }
         .clip-thumbnail-container:hover .clip-thumbnail {
-          transform: scale(1.06);
+          transform: scale(1.03);
         }
         .clip-play-overlay {
           position: absolute;
@@ -416,208 +440,254 @@ const ClipCard = ({ clip, onDelete, onEdit, userFavourites = [], onFavouriteUpda
           left: 0;
           width: 100%;
           height: 100%;
-          background: radial-gradient(circle at center, rgba(0,0,0,0.2) 0%, rgba(0,0,0,0.6) 100%);
-          transition: background-color 0.2s ease;
+          background-color: rgba(0, 0, 0, 0.3);
+          transition: background-color var(--transition-speed);
           z-index: 2;
         }
         .clip-thumbnail-container:hover .clip-play-overlay {
-          background: radial-gradient(circle at center, rgba(0,0,0,0.3) 0%, rgba(0,0,0,0.75) 100%);
+          background-color: rgba(0, 0, 0, 0.5);
         }
         .play-icon-circle {
-          width: 52px;
-          height: 52px;
+          width: 50px;
+          height: 50px;
           border-radius: 50%;
-          background: linear-gradient(135deg, rgba(79, 70, 229, 0.92) 0%, rgba(147, 51, 234, 0.92) 100%);
+          background-color: var(--accent-color);
           color: #ffffff;
-          box-shadow: 0 4px 20px rgba(79, 70, 229, 0.5);
-          transform: scale(0.92);
-          transition: transform 0.25s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.25s ease;
-          backdrop-filter: blur(4px);
+          box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+          transform: scale(0.9);
+          transition: transform var(--transition-speed);
         }
         .clip-thumbnail-container:hover .play-icon-circle {
-          transform: scale(1.08);
-          box-shadow: 0 6px 24px rgba(147, 51, 234, 0.7);
+          transform: scale(1);
         }
         .clip-type-badge {
           position: absolute;
-          bottom: 0.6rem;
-          left: 0.6rem;
-          padding: 0.2rem 0.55rem;
-          background: rgba(0, 0, 0, 0.75);
-          backdrop-filter: blur(8px);
+          bottom: 0.5rem;
+          left: 0.5rem;
+          padding: 0.2rem 0.5rem;
+          background-color: rgba(0, 0, 0, 0.85);
           color: #ffffff;
-          border: 1px solid rgba(255, 255, 255, 0.15);
-          border-radius: 6px;
-          font-size: 0.7rem;
-          font-weight: 700;
-          letter-spacing: 0.05em;
+          border-radius: 4px;
+          font-size: 0.75rem;
+          font-weight: 500;
           text-transform: uppercase;
           z-index: 3;
         }
-        .clip-card .card-content {
-          padding: 1.1rem;
-          display: flex;
-          flex-direction: column;
-          flex-grow: 1;
-        }
         .clip-card .card-title {
-          font-size: 1.05rem;
+          font-size: 1rem;
           font-weight: 600;
-          line-height: 1.35;
-          margin-bottom: 0.5rem;
+          margin-bottom: 0.25rem;
           color: var(--text-primary);
-          display: -webkit-box;
-          -webkit-line-clamp: 2;
-          -webkit-box-orient: vertical;
-          overflow: hidden;
-        }
-        .clip-movie-badge-wrapper {
-          margin-bottom: 0.6rem;
-        }
-        .clip-movie-pill {
-          display: inline-flex;
-          align-items: center;
-          padding: 0.25rem 0.6rem;
-          background: var(--accent-light, rgba(99, 102, 241, 0.12));
-          border: 1px solid rgba(99, 102, 241, 0.25);
-          border-radius: 6px;
-          color: var(--accent-color);
-          font-size: 0.78rem;
-          font-weight: 600;
-          text-decoration: none;
-          max-width: 100%;
-        }
-        .clip-movie-pill:hover {
-          background: var(--accent-color);
-          color: #ffffff;
-        }
-        .clip-movie-pill-title {
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
         }
-        .clip-description {
-          font-size: 0.85rem;
+        .clip-movie-title {
+          font-size: 0.813rem;
           color: var(--text-secondary);
-          line-height: 1.45;
-          margin-bottom: 0.75rem;
+          margin-bottom: 0.5rem;
+        }
+        .clip-movie-title span {
+          color: var(--text-primary);
+          font-weight: 500;
+        }
+        .clip-description {
+          font-size: 0.875rem;
+          color: var(--text-secondary);
+          margin-bottom: 1rem;
           display: -webkit-box;
-          -webkit-line-clamp: 2;
+          -webkit-line-clamp: 3;
           -webkit-box-orient: vertical;
           overflow: hidden;
+          text-overflow: ellipsis;
         }
         .clip-cast-list {
           display: flex;
           flex-wrap: wrap;
-          align-items: center;
-          gap: 0.35rem;
+          gap: 0.25rem;
           margin-top: auto;
           margin-bottom: 0.75rem;
         }
         .clip-cast-pill {
-          font-size: 0.72rem;
-          padding: 0.2rem 0.5rem;
-          background: var(--bg-tertiary);
+          font-size: 0.75rem;
+          padding: 0.125rem 0.375rem;
+          background-color: var(--bg-tertiary);
           border: 1px solid var(--border-color);
-          border-radius: 6px;
+          border-radius: 4px;
           color: var(--text-secondary);
           text-decoration: none;
-          transition: background-color 0.2s, color 0.2s;
-        }
-        .clip-cast-pill:hover {
-          background: var(--border-color);
-          color: var(--text-primary);
-        }
-        .clip-cast-more {
-          font-size: 0.72rem;
-          font-weight: 600;
-          color: var(--text-muted);
-          padding: 0.1rem 0.3rem;
         }
         .clip-actions {
-          margin-top: auto;
-          padding-top: 0.75rem;
-          border-top: 1px dashed var(--border-color);
+          margin-top: 1rem;
           gap: 0.5rem;
+          justify-content: space-between;
+          padding-top: 0.5rem;
+          border-top: 1px dashed var(--border-color);
           align-items: center;
         }
-        .clip-btn-action {
-          min-height: 36px;
-          padding: 0.35rem 0.65rem;
-          font-size: 0.8rem;
-          font-weight: 500;
-          border-radius: 6px;
-        }
-        .clip-btn-icon {
-          min-height: 36px;
-          width: 36px;
-          padding: 0;
-          display: inline-flex;
-          align-items: center;
-          justify-content: center;
-          border-radius: 6px;
+        .clip-card .card-content > .clip-actions:last-child {
+          margin-top: auto;
         }
 
         /* Source indicator badges */
         .clip-source-badge {
           position: absolute;
-          top: 0.6rem;
-          right: 0.6rem;
-          padding: 0.2rem 0.55rem;
-          border-radius: 6px;
-          font-size: 0.68rem;
+          top: 0.5rem;
+          right: 0.5rem;
+          padding: 0.15rem 0.45rem;
+          border-radius: 4px;
+          font-size: 0.65rem;
           font-weight: 700;
           letter-spacing: 0.04em;
           text-transform: uppercase;
           color: #ffffff;
           z-index: 3;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.5);
-          backdrop-filter: blur(6px);
+          box-shadow: 0 2px 6px rgba(0,0,0,0.4);
         }
-        .gdrive-source-badge {
-          background: linear-gradient(135deg, #137333 0%, #1a73e8 100%);
+        .gdrive-source-badge { background: #137333; }
+        .b2-source-badge { background: #2563eb; }
+        .youtube-source-badge { background: #dc2626; }
+        .instagram-source-badge { background: #cc2366; }
+
+        /* Video Player Modal overlay */
+        .video-player-backdrop {
+          position: fixed;
+          top: 0;
+          left: 0;
+          width: 100vw;
+          height: 100dvh;
+          background-color: rgba(0,0,0,0.85);
+          z-index: 10000;
+          padding: 1rem;
         }
-        .b2-source-badge {
-          background: linear-gradient(135deg, #2563eb 0%, #3b82f6 100%);
+        .video-player-modal {
+          width: 100%;
+          max-width: 840px;
+          background-color: #000000;
+          border: 1px solid var(--border-color);
+          border-radius: var(--border-radius);
+          overflow: hidden;
+          box-shadow: var(--shadow-md);
         }
-        .youtube-source-badge {
-          background: linear-gradient(135deg, #dc2626 0%, #ef4444 100%);
+        .video-modal-header {
+          padding: 0.75rem 1.25rem;
+          background-color: var(--bg-secondary);
+          border-bottom: 1px solid var(--border-color);
+          color: #ffffff;
         }
-        .instagram-source-badge {
-          background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+        .video-modal-title {
+          font-weight: 600;
+          font-size: 1rem;
+          white-space: nowrap;
+          overflow: hidden;
+          text-overflow: ellipsis;
+        }
+        .video-close-btn, .video-header-btn {
+          background: none;
+          border: none;
+          color: #ffffff;
+          font-size: 1.5rem;
+          cursor: pointer;
+          width: 36px;
+          height: 36px;
+        }
+        .video-iframe-wrapper {
+          position: relative;
+          width: 100%;
+          padding-top: 56.25%; /* 16:9 Aspect Ratio */
+        }
+        .video-iframe {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+        }
+        .unsupported-video {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          background-color: var(--bg-primary);
+          color: var(--text-primary);
+          padding: 1rem;
         }
 
-        /* Responsive Mobile First Adjustments */
+        .clip-card .fav-btn {
+          min-height: 32px !important;
+          height: 32px !important;
+          font-size: 0.75rem !important;
+          padding: 0.25rem 0.5rem !important;
+        }
+        .clip-card .fav-active-btn-group {
+          border-radius: var(--border-radius);
+          overflow: hidden;
+        }
+        .clip-card .fav-active-btn-group .btn {
+          min-height: 32px !important;
+          height: 32px !important;
+          font-size: 0.75rem !important;
+        }
+        .clip-card .fav-dropdown-menu {
+          bottom: 100%;
+          top: auto;
+          margin-top: 0;
+          margin-bottom: 0.25rem;
+        }
+
+        /* Instagram & Mobile Responsiveness */
+        .instagram-modal {
+          max-width: 440px !important;
+        }
+        .instagram-modal .video-iframe-wrapper {
+          padding-top: 125% !important;
+        }
+
         @media (max-width: 640px) {
-          .clip-card .card-content {
-            padding: 0.9rem;
-          }
-          .clip-card .card-title {
-            font-size: 0.95rem;
-          }
-          .clip-btn-action {
-            min-height: 40px;
-            padding: 0.4rem 0.75rem;
-            font-size: 0.82rem;
-          }
-          .clip-btn-icon {
-            min-height: 40px;
-            width: 40px;
-          }
-          .play-icon-circle {
-            width: 46px;
-            height: 46px;
-          }
           .video-player-backdrop {
             padding: 0.5rem;
           }
           .video-player-modal {
-            max-width: 100%;
-            border-radius: 8px;
+            max-width: 100% !important;
           }
-          .video-header-btn, .video-close-btn {
-            width: 40px;
-            height: 40px;
+          .clip-card .card-content {
+            padding: 0.6rem;
+          }
+          .clip-description {
+            font-size: 0.75rem;
+            margin-bottom: 0.5rem;
+            -webkit-line-clamp: 2;
+          }
+          .play-icon-circle {
+            width: 38px;
+            height: 38px;
+          }
+          .play-icon-circle svg {
+            width: 16px;
+            height: 16px;
+          }
+          .clip-source-badge {
+            top: 0.35rem;
+            right: 0.35rem;
+            font-size: 0.55rem;
+            padding: 0.1rem 0.35rem;
+          }
+          .clip-type-badge {
+            bottom: 0.35rem;
+            left: 0.35rem;
+            font-size: 0.65rem;
+            padding: 0.15rem 0.35rem;
+          }
+          .clip-actions {
+            margin-top: 0.5rem;
+            padding-top: 0.35rem;
+            gap: 0.25rem;
+          }
+          .clip-actions .btn {
+            min-height: 30px;
+            font-size: 0.7rem;
+            padding: 0.2rem 0.4rem;
           }
         }
       `}</style>
