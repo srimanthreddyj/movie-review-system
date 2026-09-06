@@ -306,6 +306,37 @@ const fetchAndResolvePopularMovies = async (req) => {
     ]
   });
 
+  // Asynchronously ensure popular movies exist in DB with isPopular = true
+  Promise.resolve().then(async () => {
+    try {
+      for (const item of externalMovies) {
+        if (!item.refId) continue;
+        const exists = localMovies.find(m => (m.tmdbId && m.tmdbId === item.refId) || (m.imdbId && m.imdbId === item.refId));
+        if (exists) {
+          if (!exists.isPopular) {
+            exists.isPopular = true;
+            await exists.save();
+          }
+        } else {
+          await Movie.create({
+            title: item.title,
+            originalTitle: item.originalTitle || '',
+            releaseDate: item.releaseDate,
+            posterUrl: item.posterUrl || '',
+            synopsis: item.synopsis || '',
+            tmdbId: item.source === 'tmdb' ? item.refId : '',
+            imdbId: item.source === 'omdb' ? item.refId : '',
+            dataSource: item.source || 'tmdb',
+            isPopular: true,
+            genre: item.genre || []
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Background popular movies DB upsert failed:', e.message);
+    }
+  });
+
   const combined = externalMovies.map(item => {
     let existingLocal = null;
     if (item.source === 'tmdb') {

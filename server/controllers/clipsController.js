@@ -110,6 +110,26 @@ exports.getClips = async (req, res) => {
   }
 };
 
+// Get single clip by ID with fresh presigned URL
+exports.getClipById = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const clip = await Clip.findById(id)
+      .populate('movieId', 'title posterUrl mediaType')
+      .populate('castInvolved', 'name photoUrl gender')
+      .populate('addedBy', 'name');
+
+    if (!clip) {
+      return res.status(404).json({ message: 'Clip not found' });
+    }
+
+    res.json(await signClip(clip));
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+};
+
+
 // Get presigned URL for upload
 exports.getUploadUrl = async (req, res) => {
   try {
@@ -159,7 +179,7 @@ exports.getUploadUrl = async (req, res) => {
 // Add a new clip
 exports.addClip = async (req, res) => {
   try {
-    const { movieId, title, url, description, clipType, castInvolved, b2FileSize } = req.body;
+    const { movieId, title, url, description, clipType, thumbnailUrl, castInvolved, b2FileSize } = req.body;
 
     if (!title || !url) {
       return res.status(400).json({ message: 'Title and URL are required' });
@@ -187,6 +207,7 @@ exports.addClip = async (req, res) => {
       url,
       description,
       clipType: clipType || 'trailer',
+      thumbnailUrl: thumbnailUrl || '',
       castInvolved: castInvolved || [],
       addedBy: req.user.id,
       b2FileSize: b2FileSize ? parseInt(b2FileSize, 10) : 0
@@ -218,7 +239,7 @@ exports.addClip = async (req, res) => {
 exports.updateClip = async (req, res) => {
   try {
     const { id } = req.params;
-    const { movieId, title, url, description, clipType, castInvolved, b2FileSize } = req.body;
+    const { movieId, title, url, description, clipType, thumbnailUrl, castInvolved, b2FileSize } = req.body;
 
     const clip = await Clip.findById(id);
     if (!clip) {
@@ -257,6 +278,7 @@ exports.updateClip = async (req, res) => {
     if (url) clip.url = url;
     if (description !== undefined) clip.description = description;
     if (clipType) clip.clipType = clipType;
+    if (thumbnailUrl !== undefined) clip.thumbnailUrl = thumbnailUrl;
     if (b2FileSize !== undefined) clip.b2FileSize = b2FileSize ? parseInt(b2FileSize, 10) : 0;
 
     await clip.save();

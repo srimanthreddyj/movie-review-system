@@ -61,7 +61,6 @@ const Cast = () => {
         api.get('/favourites')
       ]);
       setCastList(castRes.data.casts || []);
-      setCurrentPage(castRes.data.page || 1);
       setTotalPages(castRes.data.totalPages || 1);
       setTotalCasts(castRes.data.totalCasts || 0);
       setUserFavs(favsRes.data.cast || []);

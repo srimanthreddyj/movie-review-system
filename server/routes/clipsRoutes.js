@@ -13,6 +13,12 @@ router.get('/upload-url', auth, clipsController.getUploadUrl);
 // @access  Private
 router.get('/', auth, clipsController.getClips);
 
+// @route   GET /api/clips/:id
+// @desc    Get single clip by ID with fresh presigned URL
+// @access  Private
+router.get('/:id', auth, clipsController.getClipById);
+
+
 // @route   POST /api/clips
 // @desc    Add a new clip
 // @access  Private

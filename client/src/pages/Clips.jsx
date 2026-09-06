@@ -44,6 +44,7 @@ const Clips = () => {
     url: '',
     description: '',
     clipType: 'trailer',
+    thumbnailUrl: '',
     movieId: '',
     castInvolved: []
   });
@@ -280,6 +281,7 @@ const Clips = () => {
       url: clip.url || '',
       description: clip.description || '',
       clipType: clip.clipType || 'trailer',
+      thumbnailUrl: clip.thumbnailUrl || '',
       movieId: clip.movieId && typeof clip.movieId === 'object' ? clip.movieId._id : (clip.movieId || ''),
       castInvolved: clip.castInvolved ? clip.castInvolved.map(c => typeof c === 'object' ? c._id : c) : []
     });
@@ -495,6 +497,7 @@ const Clips = () => {
         url: '',
         description: '',
         clipType: 'trailer',
+        thumbnailUrl: '',
         movieId: '',
         castInvolved: []
       });
@@ -565,6 +568,7 @@ const Clips = () => {
               url: '',
               description: '',
               clipType: 'trailer',
+              thumbnailUrl: '',
               movieId: '',
               castInvolved: []
             });
@@ -779,6 +783,19 @@ const Clips = () => {
                     )}
                   </div>
                 )}
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Thumbnail Image URL (Optional)</label>
+                <input 
+                  type="url" 
+                  name="thumbnailUrl"
+                  className="form-input" 
+                  placeholder="https://example.com/poster.jpg (Leave blank to use video frame or movie banner)"
+                  value={formData.thumbnailUrl || ''}
+                  onChange={handleInputChange}
+                  autoComplete="off"
+                />
               </div>
 
               {/* Movie/TV Series Search autocomplete */}

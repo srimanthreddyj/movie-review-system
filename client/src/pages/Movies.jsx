@@ -64,7 +64,6 @@ const Movies = () => {
 
       const response = await api.get('/movies', { params });
       setMovies(response.data.movies || []);
-      setCurrentPage(response.data.page || 1);
       setTotalPages(response.data.totalPages || 1);
       setTotalMovies(response.data.totalMovies || 0);
 

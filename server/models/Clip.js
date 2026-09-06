@@ -22,6 +22,10 @@ const ClipSchema = new mongoose.Schema({
     enum: ['trailer', 'scene', 'interview', 'song', 'bts', 'other'],
     default: 'trailer'
   },
+  thumbnailUrl: {
+    type: String,
+    default: ''
+  },
   b2FileSize: {
     type: Number,
     default: 0

@@ -21,7 +21,7 @@ const queryGemini = async (prompt) => {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) throw new Error('Gemini API Key missing');
 
-  const models = ['gemini-3.6-flash', 'gemini-2.5-flash', 'gemini-flash-latest', 'gemini-1.5-flash'];
+  const models = ['gemini-2.5-flash', 'gemini-flash-latest'];
   let lastError;
   for (const model of models) {
     try {
@@ -1122,8 +1122,17 @@ const getPopularCastFromGemini = async () => {
   }
 };
 
+let popularMoviesCache = { data: null, timestamp: 0 };
+let popularCastCache = { data: null, timestamp: 0 };
+const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour cache
+
 // Fetch top 20 popular movies from TMDB
 exports.getPopularMovies = async () => {
+  const now = Date.now();
+  if (popularMoviesCache.data && (now - popularMoviesCache.timestamp < CACHE_TTL_MS)) {
+    return popularMoviesCache.data;
+  }
+
   const apiKey = process.env.TMDB_API_KEY;
   const geminiApiKey = process.env.GEMINI_API_KEY;
 
@@ -1191,6 +1200,7 @@ exports.getPopularMovies = async () => {
 
       const filteredMoviesList = moviesList.filter(Boolean);
       if (filteredMoviesList.length > 0) {
+        popularMoviesCache = { data: filteredMoviesList, timestamp: Date.now() };
         return filteredMoviesList;
       }
     } catch (err) {
@@ -1198,14 +1208,14 @@ exports.getPopularMovies = async () => {
     }
   }
 
-  // Fallback to TMDB native popular movies endpoint
+  // Native TMDB popular movies endpoint (fetching top 5 pages = 100 movies)
   try {
     if (!apiKey) throw new Error('TMDB API Key missing');
 
-    const url = `https://api.themoviedb.org/3/movie/popular?api_key=${apiKey}&language=en-US&page=1`;
-    const res = await fetchWithTimeout(url);
-    if (!res.ok) throw new Error(`TMDB Popular Movies fetch failed: ${res.statusText}`);
-    const data = await res.json();
+    const pagesToFetch = [1, 2, 3, 4, 5];
+    const pageResponses = await Promise.all(
+      pagesToFetch.map(p => fetchWithTimeout(`https://api.themoviedb.org/3/movie/popular?api_key=${apiKey}&language=en-US&page=${p}`))
+    );
 
     const genreMap = {
       28: 'Action', 12: 'Adventure', 16: 'Animation', 35: 'Comedy', 80: 'Crime',
@@ -1214,46 +1224,81 @@ exports.getPopularMovies = async () => {
       10770: 'TV Movie', 53: 'Thriller', 10752: 'War', 37: 'Western'
     };
 
-    return (data.results || []).map(movie => ({
-      title: movie.title,
-      originalTitle: movie.original_title || '',
-      releaseDate: movie.release_date ? new Date(movie.release_date) : null,
-      posterUrl: getTmdbImageUrl(movie.poster_path),
-      refId: movie.id.toString(),
-      source: 'tmdb',
-      mediaType: 'movie',
-      synopsis: movie.overview || '',
-      genre: (movie.genre_ids || []).map(id => genreMap[id]).filter(Boolean)
-    }));
+    const allMovies = [];
+    for (const res of pageResponses) {
+      if (res.ok) {
+        const data = await res.json();
+        (data.results || []).forEach(movie => {
+          allMovies.push({
+            title: movie.title,
+            originalTitle: movie.original_title || '',
+            releaseDate: movie.release_date ? new Date(movie.release_date) : null,
+            posterUrl: getTmdbImageUrl(movie.poster_path),
+            refId: movie.id.toString(),
+            source: 'tmdb',
+            mediaType: 'movie',
+            synopsis: movie.overview || '',
+            genre: (movie.genre_ids || []).map(id => genreMap[id]).filter(Boolean)
+          });
+        });
+      }
+    }
+
+    if (allMovies.length > 0) {
+      popularMoviesCache = { data: allMovies, timestamp: Date.now() };
+      return allMovies;
+    }
   } catch (err) {
     console.warn('TMDB popular movies fetch failed. Calling Gemini fallback...', err.message);
-    return await getPopularMoviesFromGemini();
+    const fallbackMovies = await getPopularMoviesFromGemini();
+    popularMoviesCache = { data: fallbackMovies, timestamp: Date.now() };
+    return fallbackMovies;
   }
 };
 
-// Fetch top 20 popular cast members (persons) from TMDB
+// Fetch top 100 popular cast members (5 pages) from TMDB
 exports.getPopularCast = async () => {
+  const now = Date.now();
+  if (popularCastCache.data && (now - popularCastCache.timestamp < CACHE_TTL_MS)) {
+    return popularCastCache.data;
+  }
+
   try {
     const apiKey = process.env.TMDB_API_KEY;
     if (!apiKey) throw new Error('TMDB API Key missing');
 
-    const url = `https://api.themoviedb.org/3/person/popular?api_key=${apiKey}&language=en-US&page=1`;
-    const res = await fetchWithTimeout(url);
-    if (!res.ok) throw new Error(`TMDB Popular Persons fetch failed: ${res.statusText}`);
-    const data = await res.json();
+    const pagesToFetch = [1, 2, 3, 4, 5];
+    const pageResponses = await Promise.all(
+      pagesToFetch.map(p => fetchWithTimeout(`https://api.themoviedb.org/3/person/popular?api_key=${apiKey}&language=en-US&page=${p}`))
+    );
 
-    return (data.results || []).map(person => ({
-      name: person.name,
-      tmdbId: person.id.toString(),
-      photoUrl: getTmdbImageUrl(person.profile_path),
-      gender: mapGender(person.gender),
-      knownForDepartment: person.known_for_department || 'Acting',
-      knownFor: (person.known_for || []).map(item => item.title || item.name || '').filter(Boolean).join(', '),
-      source: 'tmdb'
-    }));
+    const allPersons = [];
+    for (const res of pageResponses) {
+      if (res.ok) {
+        const data = await res.json();
+        (data.results || []).forEach(person => {
+          allPersons.push({
+            name: person.name,
+            tmdbId: person.id.toString(),
+            photoUrl: getTmdbImageUrl(person.profile_path),
+            gender: mapGender(person.gender),
+            knownForDepartment: person.known_for_department || 'Acting',
+            knownFor: (person.known_for || []).map(item => item.title || item.name || '').filter(Boolean).join(', '),
+            source: 'tmdb'
+          });
+        });
+      }
+    }
+
+    if (allPersons.length > 0) {
+      popularCastCache = { data: allPersons, timestamp: Date.now() };
+      return allPersons;
+    }
   } catch (err) {
     console.warn('TMDB popular cast fetch failed. Calling Gemini fallback...', err.message);
-    return await getPopularCastFromGemini();
+    const fallbackCast = await getPopularCastFromGemini();
+    popularCastCache = { data: fallbackCast, timestamp: Date.now() };
+    return fallbackCast;
   }
 };
 

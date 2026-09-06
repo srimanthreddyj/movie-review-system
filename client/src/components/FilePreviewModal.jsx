@@ -1,11 +1,14 @@
-/* eslint-disable no-unused-vars, react-hooks/exhaustive-deps, react-hooks/set-state-in-effect */
 import { useState, useEffect } from 'react';
-import { X, Download, AlertCircle } from 'lucide-react';
+import { X, Download, AlertCircle, Plus, Check } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
+import api from '../services/api';
+
 const FilePreviewModal = ({ file, onClose }) => {
   const [content, setContent] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [addedToClips, setAddedToClips] = useState(false);
+  const [addingToClips, setAddingToClips] = useState(false);
 
   const isImage = file.mimeType.startsWith('image/');
   const isVideo = file.mimeType.startsWith('video/');
@@ -14,6 +17,26 @@ const FilePreviewModal = ({ file, onClose }) => {
   const isText = file.mimeType.startsWith('text/') || file.mimeType === 'application/json';
   const isMarkdown = file.name.endsWith('.md');
   const isGoogleDoc = file.mimeType.startsWith('application/vnd.google-apps.');
+
+  const handleAddToClips = async () => {
+    setAddingToClips(true);
+    try {
+      const driveUrl = file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`;
+      const thumb = file.thumbnailLink ? file.thumbnailLink.replace(/=s\d+/, '=s800') : '';
+      await api.post('/clips', {
+        title: file.name,
+        url: driveUrl,
+        clipType: 'other',
+        thumbnailUrl: thumb
+      });
+      setAddedToClips(true);
+    } catch (err) {
+      console.error('Failed to add Google Drive video to clips:', err);
+      alert(err.response?.data?.message || 'Failed to add clip.');
+    } finally {
+      setAddingToClips(false);
+    }
+  };
 
   useEffect(() => {
     if (isText || isMarkdown) {
@@ -168,6 +191,18 @@ const FilePreviewModal = ({ file, onClose }) => {
             </div>
           </div>
           <div style={{ display: 'flex', gap: '0.5rem', flexShrink: 0 }}>
+            {isVideo && (
+              <button 
+                onClick={handleAddToClips} 
+                disabled={addingToClips || addedToClips} 
+                className={`btn ${addedToClips ? 'btn-secondary' : 'btn-primary'} flex-center`} 
+                style={{ padding: '0.35rem 0.75rem', gap: '0.35rem', fontSize: '0.8rem' }}
+                title="Save Video to Clips Catalogue"
+              >
+                {addedToClips ? <Check size={16} /> : <Plus size={16} />}
+                <span>{addedToClips ? 'Added to Clips' : 'Add to Clips'}</span>
+              </button>
+            )}
             {file.webContentLink && (
               <a href={file.webContentLink} target="_blank" rel="noopener noreferrer" className="btn flex-center" style={{ padding: '0.5rem' }} title="Download">
                 <Download size={18} />

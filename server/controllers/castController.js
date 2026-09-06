@@ -17,6 +17,34 @@ const fetchAndResolvePopularCast = async (req) => {
   const tmdbIds = externalCast.filter(c => c.tmdbId).map(c => c.tmdbId);
   const localCast = await Cast.find({ tmdbId: { $in: tmdbIds } });
 
+  // Asynchronously ensure popular cast items exist in DB with isPopular = true
+  Promise.resolve().then(async () => {
+    try {
+      for (const item of externalCast) {
+        if (!item.tmdbId) continue;
+        const exists = localCast.find(c => c.tmdbId === item.tmdbId);
+        if (exists) {
+          if (!exists.isPopular) {
+            exists.isPopular = true;
+            await exists.save();
+          }
+        } else {
+          await Cast.create({
+            name: item.name,
+            tmdbId: item.tmdbId,
+            photoUrl: item.photoUrl || '',
+            gender: item.gender || 'Unspecified',
+            knownFor: item.knownForDepartment || 'Actor',
+            dataSource: item.source || 'tmdb',
+            isPopular: true
+          });
+        }
+      }
+    } catch (e) {
+      console.warn('Background popular cast DB upsert failed:', e.message);
+    }
+  });
+
   const combined = externalCast.map(item => {
     const existingLocal = localCast.find(c => c.tmdbId === item.tmdbId);
     if (existingLocal) {
@@ -125,27 +153,6 @@ exports.getCasts = async (req, res) => {
       .sort({ name: 1 });
 
     const total = await Cast.countDocuments(query);
-
-    // Asynchronously enrich cast member records lacking photos in the background
-    casts.forEach(castMember => {
-      const hasPlaceholder = castMember.photoUrl && castMember.photoUrl.includes('example.com');
-      const isEmpty = !castMember.photoUrl;
-      if (isEmpty || hasPlaceholder) {
-        const movieApiService = require('../services/movieApiService');
-        movieApiService.enrichCastProfile(castMember.name).then(async (enriched) => {
-          if (enriched) {
-            castMember.photoUrl = enriched.photoUrl || castMember.photoUrl;
-            castMember.gender = enriched.gender !== 'Unspecified' ? enriched.gender : castMember.gender;
-            if (enriched.bio) castMember.bio = enriched.bio;
-            if (enriched.birthDate) castMember.birthDate = enriched.birthDate;
-            if (enriched.nationality) castMember.nationality = enriched.nationality;
-            if (enriched.tmdbId) castMember.tmdbId = enriched.tmdbId;
-            if (enriched.imdbId) castMember.imdbId = enriched.imdbId;
-            await castMember.save();
-          }
-        }).catch(err => console.warn(`Background enrichment failed for ${castMember.name}:`, err.message));
-      }
-    });
 
     res.json({
       casts,
